@@ -15,7 +15,7 @@
 
 #include <linux/device.h>
 #include <linux/platform_device.h>
-#include <linux/extcon.h>
+#include <linux/extcon-provider.h>
 
 #define AUDIO_ACK_SET_ENABLE BIT(5)
 #define AUDIO_ACK_ENABLE BIT(4)
