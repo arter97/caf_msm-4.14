@@ -513,14 +513,11 @@ static void start_io_acct(struct dm_io *io)
 {
 	struct mapped_device *md = io->md;
 	struct bio *bio = io->bio;
-	int cpu;
 	int rw = bio_data_dir(bio);
 
 	io->start_time = jiffies;
 
-	cpu = part_stat_lock();
-	part_round_stats(md->queue, cpu, &dm_disk(md)->part0);
-	part_stat_unlock();
+	generic_start_io_acct(md->queue, rw, bio_sectors(bio), &dm_disk(md)->part0);
 	atomic_set(&dm_disk(md)->part0.in_flight[rw],
 		atomic_inc_return(&md->pending[rw]));
 
