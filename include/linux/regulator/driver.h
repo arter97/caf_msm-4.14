@@ -261,6 +261,7 @@ enum regulator_type {
  * @continuous_voltage_range: Indicates if the regulator can set any
  *                            voltage within constrains range.
  * @n_voltages: Number of selectors available for ops.list_voltage().
+ * @n_current_limits: Number of selectors available for current limits
  *
  * @min_uV: Voltage given by the lowest selector (if linear mapping)
  * @uV_step: Voltage increase with each selector (if linear mapping)
@@ -271,6 +272,7 @@ enum regulator_type {
  * @linear_ranges: A constant table of possible voltage ranges.
  * @n_linear_ranges: Number of entries in the @linear_ranges table.
  * @volt_table: Voltage mapping table (if table based mapping)
+ * @curr_table: Current limit mapping table (if table based mapping)
  *
  * @vsel_reg: Register for selector when using regulator_regmap_X_voltage_
  * @vsel_mask: Mask for register bitfield used for selector
@@ -323,6 +325,7 @@ struct regulator_desc {
 	int id;
 	unsigned int continuous_voltage_range:1;
 	unsigned n_voltages;
+	unsigned int n_current_limits;
 	const struct regulator_ops *ops;
 	int irq;
 	enum regulator_type type;
@@ -339,6 +342,7 @@ struct regulator_desc {
 	int n_linear_ranges;
 
 	const unsigned int *volt_table;
+	const unsigned int *curr_table;
 
 	unsigned int vsel_reg;
 	unsigned int vsel_mask;
@@ -506,6 +510,9 @@ int regulator_set_pull_down_regmap(struct regulator_dev *rdev);
 
 int regulator_set_active_discharge_regmap(struct regulator_dev *rdev,
 					  bool enable);
+int regulator_set_current_limit_regmap(struct regulator_dev *rdev,
+				       int min_uA, int max_uA);
+int regulator_get_current_limit_regmap(struct regulator_dev *rdev);
 void *regulator_get_init_drvdata(struct regulator_init_data *reg_init_data);
 
 #endif
