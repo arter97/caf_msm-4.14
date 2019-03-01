@@ -124,7 +124,7 @@ static void glink_smem_rx_advance(struct qcom_glink_pipe *np,
 
 	tail += count;
 	if (tail >= pipe->native.length)
-		tail -= pipe->native.length;
+		tail %= pipe->native.length;
 
 	*pipe->tail = cpu_to_le32(tail);
 }
@@ -160,6 +160,9 @@ static unsigned int glink_smem_tx_write_one(struct glink_smem_pipe *pipe,
 					    const void *data, size_t count)
 {
 	size_t len;
+
+	if (WARN_ON_ONCE(head > pipe->native.length))
+		return head;
 
 	if (WARN_ON_ONCE(head > pipe->native.length))
 		return head;
