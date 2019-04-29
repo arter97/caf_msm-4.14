@@ -2394,7 +2394,6 @@ static int mdss_dp_process_hpd_high(struct mdss_dp_drv_pdata *dp)
 		 */
 		pr_err("dpcd read failed, set failsafe parameters\n");
 		mdss_dp_set_default_link_parameters(dp);
-		goto read_edid;
 	}
 
 	/*
@@ -2412,7 +2411,6 @@ static int mdss_dp_process_hpd_high(struct mdss_dp_drv_pdata *dp)
 		goto end;
 	}
 
-read_edid:
 	ret = mdss_dp_edid_read(dp);
 	if (ret) {
 		if (ret == -ENODEV)
@@ -4378,10 +4376,6 @@ static void mdss_dp_process_attention(struct mdss_dp_drv_pdata *dp_drv)
 	if (!dp_drv->alt_mode.dp_status.hpd_high) {
 		pr_debug("Attention: HPD low\n");
 
-		if (!dp_drv->power_on) {
-			pr_debug("HPD already low\n");
-			return;
-		}
 
 		if (dp_is_hdcp_enabled(dp_drv) && dp_drv->hdcp.ops->off) {
 			cancel_delayed_work_sync(&dp_drv->hdcp_cb_work);
@@ -4465,7 +4459,6 @@ static void mdss_dp_handle_attention(struct mdss_dp_drv_pdata *dp)
 
 		dp->alt_mode.dp_status.response = vdo;
 		mdss_dp_usbpd_ext_dp_status(&dp->alt_mode.dp_status);
-		mdss_dp_process_attention(dp);
 
 		if (atomic_read(&dp->notification_pending)) {
 			pr_debug("waiting for the attention event to finish\n");
@@ -4482,6 +4475,7 @@ static void mdss_dp_handle_attention(struct mdss_dp_drv_pdata *dp)
 			 */
 			wait_for_completion(&dp->notification_comp);
 		}
+		mdss_dp_process_attention(dp);
 		pr_debug("done processing item %d in the list\n", i);
 	};
 
