@@ -1,14 +1,7 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/module.h>
@@ -1080,17 +1073,19 @@ static void gsi_ring_db(struct usb_ep *ep, struct usb_gsi_request *request)
 	int num_trbs = (dep->direction) ? (2 * (request->num_bufs) + 2)
 					: (request->num_bufs + 2);
 
-	gsi_dbl_address_lsb = devm_ioremap_nocache(mdwc->dev,
-				request->db_reg_phs_addr_lsb, sizeof(u32));
+	gsi_dbl_address_lsb = ioremap_nocache(request->db_reg_phs_addr_lsb,
+				sizeof(u32));
 	if (!gsi_dbl_address_lsb) {
-		dev_err(mdwc->dev, "Failed to get GSI DBL address LSB\n");
+		dev_err(mdwc->dev, "Failed to map GSI DBL address LSB 0x%x\n",
+				request->db_reg_phs_addr_lsb);
 		return;
 	}
 
-	gsi_dbl_address_msb = devm_ioremap_nocache(mdwc->dev,
-			request->db_reg_phs_addr_msb, sizeof(u32));
+	gsi_dbl_address_msb = ioremap_nocache(request->db_reg_phs_addr_msb,
+				sizeof(u32));
 	if (!gsi_dbl_address_msb) {
-		dev_err(mdwc->dev, "Failed to get GSI DBL address MSB\n");
+		dev_err(mdwc->dev, "Failed to map GSI DBL address MSB 0x%x\n",
+				request->db_reg_phs_addr_msb);
 		return;
 	}
 
@@ -1106,6 +1101,9 @@ static void gsi_ring_db(struct usb_ep *ep, struct usb_gsi_request *request)
 	readl_relaxed(gsi_dbl_address_lsb);
 	writel_relaxed(0, gsi_dbl_address_msb);
 	readl_relaxed(gsi_dbl_address_msb);
+
+	iounmap(gsi_dbl_address_lsb);
+	iounmap(gsi_dbl_address_msb);
 }
 
 /**
