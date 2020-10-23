@@ -129,3 +129,19 @@
 		    &sdc2_cd_off &sdc2_dsrc_nand_off>;
 	status = "ok";
 };
+
+&gpu_bw_tbl {
+	status = "disabled";
+};
+
+&gpubw {
+       status = "disabled";
+};
+
+&msm_gpu {
+       status = "disabled";
+};
+
+&kgsl_msm_iommu {
+       status = "disabled";
+};
