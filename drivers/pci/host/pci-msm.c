@@ -309,6 +309,7 @@ enum msm_pcie_res {
 	MSM_PCIE_RES_ELBI,
 	MSM_PCIE_RES_IATU,
 	MSM_PCIE_RES_CONF,
+	MSM_PCIE_RES_MHI,
 	MSM_PCIE_RES_TCSR,
 	MSM_PCIE_MAX_RES,
 };
@@ -649,6 +650,7 @@ struct msm_pcie_dev_t {
 	void __iomem		     *iatu;
 	void __iomem		     *dm_core;
 	void __iomem		     *conf;
+	void __iomem		     *mhi;
 	void __iomem		     *tcsr;
 
 	uint32_t			    axi_bar_start;
@@ -1003,6 +1005,7 @@ static const struct msm_pcie_res_info_t msm_pcie_res_info[MSM_PCIE_MAX_RES] = {
 	{"elbi",	NULL, NULL},
 	{"iatu",	NULL, NULL},
 	{"conf",	NULL, NULL},
+	{"mhi",		NULL, NULL},
 	{"tcsr",	NULL, NULL}
 };
 
@@ -4047,6 +4050,7 @@ static int msm_pcie_get_resources(struct msm_pcie_dev_t *dev,
 	dev->iatu = dev->res[MSM_PCIE_RES_IATU].base;
 	dev->dm_core = dev->res[MSM_PCIE_RES_DM_CORE].base;
 	dev->conf = dev->res[MSM_PCIE_RES_CONF].base;
+	dev->mhi = dev->res[MSM_PCIE_RES_MHI].base;
 	dev->tcsr = dev->res[MSM_PCIE_RES_TCSR].base;
 
 out:
@@ -4064,6 +4068,7 @@ static void msm_pcie_release_resources(struct msm_pcie_dev_t *dev)
 	dev->iatu = NULL;
 	dev->dm_core = NULL;
 	dev->conf = NULL;
+	dev->mhi = NULL;
 	dev->tcsr = NULL;
 }
 
