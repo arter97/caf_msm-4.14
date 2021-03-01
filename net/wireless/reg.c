@@ -2247,8 +2247,10 @@ static void notify_self_managed_wiphys(struct regulatory_request *request)
 		wiphy = &rdev->wiphy;
 		if (wiphy->regulatory_flags & REGULATORY_WIPHY_SELF_MANAGED &&
 		    request->initiator == NL80211_REGDOM_SET_BY_USER &&
-		    request->user_reg_hint_type ==
-				NL80211_USER_REG_HINT_CELL_BASE)
+		    (request->user_reg_hint_type ==
+				NL80211_USER_REG_HINT_CELL_BASE ||
+			request->user_reg_hint_type ==
+				NL80211_USER_REG_HINT_USER))
 			reg_call_notifier(wiphy, request);
 	}
 }
