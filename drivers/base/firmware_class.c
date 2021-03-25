@@ -382,7 +382,9 @@ static void fw_free_buf(struct firmware_buf *buf)
 static char fw_path_para[256];
 static const char * const fw_path[] = {
 	fw_path_para,
+	"/vendor/firmware_mnt/image",
 	"/early_services/firmware",
+	"/early_services/vendor/firmware_mnt/image",
 	"/lib/firmware/updates/" UTS_RELEASE,
 	"/lib/firmware/updates",
 	"/lib/firmware/" UTS_RELEASE,
@@ -428,6 +430,7 @@ fw_get_filesystem_firmware(struct device *device, struct firmware_buf *buf)
 			rc = -ENAMETOOLONG;
 			break;
 		}
+		dev_err(device, "[%d] firmware loading %s\n",i,path);
 
 		buf->size = 0;
 		rc = kernel_read_file_from_path(path, &buf->data, &size, msize,
