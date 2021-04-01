@@ -36,6 +36,9 @@ Optional properties:
 - qcom,shared-display-name:  A string used as a descriptive name of the shared display.
 			If qcom,shared-display-name is not defined, a system auto-generated
 			name will be used like DSI-X or DP-X.
+- qcom,inithandoff-display:  A phandle property used to mention the shared displays which has to
+			be handoff when there is first commit on the shared display where this
+			flag is defined.
 
 qcom,shared-display-base properties:
 
@@ -149,5 +152,24 @@ Example of dynamic mode using name to select base connector:
 		qcom,shared-display-base = <&sde_sh_base0>;
 		qcom,blend-stage-range = <5 5>;
 		qcom,shared-display-name = "shared-disp-1";
+	};
+};
+
+Example of qcom,inithandoff-display property
+When there is a commit on sde_sh0 shared display hand off the sde_sh1, sde_sh2
+shared display resources.
+/ {
+	...
+
+	sde_sh0: qcom,shared-display@0 {
+		qcom,inithandoff-display = <&sde_sh1 &sde_sh2>
+	};
+
+	sde_sh1: qcom,shared-display@1 {
+		...
+	};
+
+	sde_sh2: qcom,shared-display@2 {
+		...
 	};
 };
