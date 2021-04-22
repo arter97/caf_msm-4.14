@@ -138,9 +138,6 @@ static DEFINE_SPINLOCK(pci_reg_window_lock);
 
 #define QCA6390_WLAON_QFPROM_PWR_CTRL_REG	0x1F8031C
 
-#define POWER_ON_RETRY_MAX_TIMES		3
-#define POWER_ON_RETRY_DELAY_MS			200
-
 #define LINK_TRAINING_RETRY_MAX_TIMES		3
 
 static struct cnss_pci_reg ce_src[] = {
