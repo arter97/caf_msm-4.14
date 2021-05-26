@@ -94,7 +94,7 @@ static long hab_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 	void *send_data;
 	unsigned char data[256] = { 0 };
 	long ret = 0;
-	char names[30];
+	char names[30] = { 0 };
 
 	if (_IOC_SIZE(cmd) && (cmd & IOC_IN)) {
 		if (_IOC_SIZE(cmd) > sizeof(data))
