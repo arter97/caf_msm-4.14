@@ -198,7 +198,6 @@ struct plat_stmmacenet_data {
 		 select_queue_fallback_t fallback);
 	unsigned int (*get_plat_tx_coal_frames)
 		(struct sk_buff *skb);
-	int (*handle_mac_err)(void *priv, int type, int chan);
 	bool early_eth;
 };
 #endif
