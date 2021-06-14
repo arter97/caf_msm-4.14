@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 // Copyright (c) 2018-19, Linaro Limited
-// Copyright (c) 2020, The Linux Foundation. All rights reserved.
+// Copyright (c) 2020-21, The Linux Foundation. All rights reserved.
 
 #include <linux/module.h>
 #include <linux/of.h>
@@ -49,6 +49,20 @@ static char err_names[10][14] = {"PHY_RW_ERR",
 	"WDT_ERR",
 };
 
+static struct ethqos_emac_por emac_por[] = {
+	{ .offset = RGMII_IO_MACRO_CONFIG,	.value = 0x0 },
+	{ .offset = SDCC_HC_REG_DLL_CONFIG,	.value = 0x0 },
+	{ .offset = SDCC_HC_REG_DDR_CONFIG,	.value = 0x0 },
+	{ .offset = SDCC_HC_REG_DLL_CONFIG2,	.value = 0x0 },
+	{ .offset = SDCC_USR_CTL,		.value = 0x0 },
+	{ .offset = RGMII_IO_MACRO_CONFIG2,	.value = 0x0},
+};
+
+static struct ethqos_emac_driver_data emac_por_data = {
+	.por = emac_por,
+	.num_por = ARRAY_SIZE(emac_por),
+};
+
 struct qcom_ethqos *pethqos;
 
 struct stmmac_emb_smmu_cb_ctx stmmac_emb_smmu_ctx = {0};
@@ -65,6 +79,21 @@ static DECLARE_WAIT_QUEUE_HEAD(mac_rec_wq);
 static bool mac_rec_wq_flag;
 
 static int retry_count;
+static void qcom_ethqos_read_iomacro_por_values(struct qcom_ethqos *ethqos)
+{
+	int i;
+
+	ethqos->por = emac_por_data.por;
+	ethqos->num_por = emac_por_data.num_por;
+
+	/* Read to POR values and enable clk */
+	for (i = 0; i < ethqos->num_por; i++)
+		ethqos->por[i].value =
+			readl_relaxed(
+				ethqos->rgmii_base +
+				ethqos->por[i].offset);
+}
+
 static inline unsigned int dwmac_qcom_get_eth_type(unsigned char *buf)
 {
 	return
@@ -1067,7 +1096,7 @@ static void ethqos_pps_irq_config(struct qcom_ethqos *ethqos)
 }
 
 static const struct of_device_id qcom_ethqos_match[] = {
-	{ .compatible = "qcom,sdxprairie-ethqos", .data = &emac_v2_3_2_por},
+	{ .compatible = "qcom,sdxprairie-ethqos",},
 	{ .compatible = "qcom,emac-smmu-embedded", },
 	{ .compatible = "qcom,stmmac-ethqos", },
 	{}
@@ -2319,8 +2348,6 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 		goto err_mem;
 	}
 
-	ethqos->por = of_device_get_match_data(&pdev->dev);
-
 	ethqos->rgmii_clk = devm_clk_get(&pdev->dev, "rgmii");
 	if (!ethqos->rgmii_clk) {
 		ret = -ENOMEM;
@@ -2429,6 +2456,8 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 	ethqos_emac_mem_base(ethqos);
 	pethqos = ethqos;
 	ethqos_create_debugfs(ethqos);
+
+	qcom_ethqos_read_iomacro_por_values(ethqos);
 
 	ndev = dev_get_drvdata(&ethqos->pdev->dev);
 	priv = netdev_priv(ndev);
