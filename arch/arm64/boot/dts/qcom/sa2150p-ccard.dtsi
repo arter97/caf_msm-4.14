@@ -189,6 +189,9 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&sdx_ext_ipc_gpio_default>;
 	};
+
+	/delete-node/ qcom,wlan_dsp@7000000;
+	/delete-node/ qcom,icnss@18800000;
 };
 
 &thermal_zones {
