@@ -808,10 +808,7 @@ void blk_mq_rq_timed_out(struct request *req, bool reserved)
 
 void blk_mq_put_rq_ref(struct request *rq)
 {
-	struct blk_mq_hw_ctx *hctx;
-
-	hctx = blk_mq_map_queue(rq->q, rq->mq_ctx->cpu);
-	if (is_flush_rq(rq, hctx))
+	if (is_flush_rq(rq))
 		rq->end_io(rq, 0);
 	else if (refcount_dec_and_test(&rq->ref))
 		__blk_mq_free_request(rq);
