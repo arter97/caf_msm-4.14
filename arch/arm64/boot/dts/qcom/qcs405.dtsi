@@ -63,6 +63,14 @@
 			reg = <0x0 0x86400000 0x0 0x1000000>;
 		};
 
+		cnss_wlan_mem: cnss_wlan_region {
+			compatible = "shared-dma-pool";
+			alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
+			reusable;
+			alignment = <0x0 0x400000>;
+			size = <0x0 0x11400000>;
+		};
+
 		adsp_fw_mem: adsp_fw_mem@87400000 {
 			compatible = "removed-dma-pool";
 			no-map;
@@ -1617,6 +1625,7 @@
 	};
 
 	bluetooth: bt_wcn3990 {
+		status = "disabled";
 		compatible = "qca,wcn3990";
 		qca,bt-vdd-xtal-supply = <&pms405_l5>;
 		qca,bt-vdd-io-supply = <&pms405_l6>;
@@ -1678,6 +1687,150 @@
 				<79 512 6250 200000>,     /* 50 Mbps */
 				<79 512 25000 200000>,    /* 200 Mbps */
 				<79 512 2048000 4096000>; /* MAX */
+	};
+
+	qcnwlan: qcom,qcn9000@b0000000 {
+		compatible = "qcom,cnss-qcn9000";
+		reg = <0xb0000000 0x10000>,
+		      <0xb2e5510 0x5c0>;
+		reg-names = "smmu_iova_ipa", "tcs_cmd";
+
+		base-addr = <0xb0000000>;
+		qcom,wlan-rc-num = <0>;
+/*		qcom,converged-dt; */
+		qcom,wlan-ramdump-dynamic = <0x420000>;
+		mhi,max-channels = <30>;
+		mhi,timeout = <10000>;
+		qrtr_node_id = <0x20>;
+		status="okay";
+
+		qcom,msm-bus,name = "msm-cnss";
+		qcom,msm-bus,num-cases = <7>;
+		qcom,msm-bus,num-paths = <1>;
+/*		qcom,msm-bus,vectors-KBps = <MSM_BUS_MASTER_PCIE MSM_BUS_SLAVE_FIRST 0 0>,
+		<MSM_BUS_MASTER_PCIE MSM_BUS_SLAVE_FIRST 2250 1600000>,
+		<MSM_BUS_MASTER_PCIE MSM_BUS_SLAVE_FIRST 7500 1600000>,
+		<MSM_BUS_MASTER_PCIE MSM_BUS_SLAVE_FIRST 30000 1804800>,
+		<MSM_BUS_MASTER_PCIE MSM_BUS_SLAVE_FIRST 100000 1804800>,
+		<MSM_BUS_MASTER_PCIE MSM_BUS_SLAVE_FIRST 175000 6220800>,
+		<MSM_BUS_MASTER_PCIE MSM_BUS_SLAVE_FIRST 7500 2188800>;
+*/
+		mhi_channels {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mhi_chan@0 {
+				label = "LOOPBACK";
+				mhi,chan-dir = <1>;
+				mhi,data-type = <0>;
+				mhi,doorbell-mode = <2>;
+				mhi,ee = <0x14>;
+				mhi,event-ring = <1>;
+				mhi,num-elements = <32>;
+				reg = <0>;
+			};
+
+			mhi_chan@1 {
+				label = "LOOPBACK";
+				mhi,chan-dir = <2>;
+				mhi,data-type = <0>;
+				mhi,doorbell-mode = <2>;
+				mhi,ee = <0x14>;
+				mhi,event-ring = <1>;
+				mhi,num-elements = <32>;
+				reg = <1>;
+			};
+
+			mhi_chan@20 {
+				label = "IPCR";
+				mhi,auto-start;
+				mhi,chan-dir = <1>;
+				mhi,data-type = <1>;
+				mhi,doorbell-mode = <2>;
+				mhi,ee = <0x14>;
+				mhi,event-ring = <1>;
+				mhi,num-elements = <32>;
+				reg = <20>;
+			};
+
+			mhi_chan@21 {
+				label = "IPCR";
+				mhi,auto-queue;
+				mhi,auto-start;
+				mhi,chan-dir = <2>;
+				mhi,data-type = <0>;
+				mhi,doorbell-mode = <2>;
+				mhi,ee = <0x14>;
+				mhi,event-ring = <1>;
+				mhi,num-elements = <32>;
+				reg = <21>;
+			};
+
+			mhi_chan@4 {
+				label = "DIAG";
+				mhi,chan-dir = <1>;
+				mhi,data-type = <0>;
+				mhi,doorbell-mode = <2>;
+				mhi,ee = <0x14>;
+				mhi,event-ring = <1>;
+				mhi,num-elements = <32>;
+				reg = <4>;
+			};
+
+			mhi_chan@5 {
+				label = "DIAG";
+				mhi,chan-dir = <2>;
+				mhi,data-type = <0>;
+				mhi,doorbell-mode = <2>;
+				mhi,ee = <0x14>;
+				mhi,event-ring = <1>;
+				mhi,num-elements = <32>;
+                reg = <5>;
+			};
+		};
+
+		mhi_events {
+			mhi_event@0 {
+				mhi,brstmode = <2>;
+				mhi,data-type = <1>;
+				mhi,intmod = <1>;
+				mhi,msi = <1>;
+				mhi,num-elements = <32>;
+				mhi,priority = <1>;
+			};
+
+			mhi_event@1 {
+				mhi,brstmode = <2>;
+				mhi,intmod = <1>;
+				mhi,msi = <2>;
+				mhi,num-elements = <256>;
+				mhi,priority = <1>;
+			};
+#if 0
+			mhi_event@2 {
+				mhi,num-elements = <32>;
+				mhi,intmod = <1>;
+				mhi,msi = <0>;
+				mhi,priority = <2>;
+				mhi,brstmode = <2>;
+				mhi,data-type = <3>;
+			};
+#endif
+		};
+
+		mhi_devices {
+			mhi_qrtr {
+				mhi,chan = "IPCR";
+				qcom,net-id = <0>;
+//				qcom,low-latency;
+//				mhi,early-notify;
+			};
+		};
+	};
+
+	qcom,test@0 {
+		compatible = "qcom,testmhi";
+		status = "ok";
 	};
 };
 
@@ -1821,5 +1974,22 @@
 			gpio-key,wakeup;
 			linux,can-disable;
 		};
+	};
+};
+
+&pcie_rc0 {
+	#address-cells = <5>;
+	#size-cells = <0>;
+	status = "ok";
+
+	cnss2_pci: cnss2_pci {
+		reg = <0 0 0 0 0>;
+		memory-region = <&cnss_wlan_mem>;
+		qrtr_instance_id = <0x20>;
+		pci-ids = "17cb:1104";
+		status = "ok";
+
+		#address-cells = <1>;
+		#size-cells = <1>;
 	};
 };
