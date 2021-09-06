@@ -27,6 +27,8 @@
 #define ST_ASM330LHHX_EWMA_LEVEL			120
 #define ST_ASM330LHHX_EWMA_DIV				128
 
+static unsigned int st_asm330lhhx_wakeup_ms = 10000;
+
 /* FIFO tags */
 enum {
 	ST_ASM330LHHX_GYRO_TAG = 0x01,
@@ -141,7 +143,8 @@ int st_asm330lhhx_update_watermark(struct st_asm330lhhx_sensor *sensor,
 		fifo_watermark = min_t(u16, fifo_watermark, cur_watermark);
 	}
 
-	fifo_watermark = max_t(u16, fifo_watermark, 2);
+	fifo_watermark = max_t(u16, fifo_watermark,
+			       hw->hw_timestamp_enabled ? 2 : 1);
 
 	mutex_lock(&hw->page_lock);
 	err = regmap_read(hw->regmap, ST_ASM330LHHX_REG_FIFO_CTRL1_ADDR + 1,
@@ -155,6 +158,9 @@ int st_asm330lhhx_update_watermark(struct st_asm330lhhx_sensor *sensor,
 
 	err = regmap_bulk_write(hw->regmap, ST_ASM330LHHX_REG_FIFO_CTRL1_ADDR,
 				&wdata, sizeof(wdata));
+
+	/* save fifo watermark for suspend/resume */
+	hw->fifo_watermark = fifo_watermark;
 out:
 	mutex_unlock(&hw->page_lock);
 
@@ -274,16 +280,22 @@ static inline void st_asm330lhhx_sync_hw_ts(struct st_asm330lhhx_hw *hw, s64 ts)
 }
 
 
-int st_asm330lhhx_read_fifo(struct st_asm330lhhx_hw *hw)
+/*
+ * st_asm330lhhx_read_fifo - read sample data from HW FIFO
+ *
+ * @notify - Ask to notify events on iio_dev_mlc_fifo_acc device
+ */
+int st_asm330lhhx_read_fifo(struct st_asm330lhhx_hw *hw, int notify)
 {
 	u8 iio_buf[ALIGN(ST_ASM330LHHX_SAMPLE_SIZE, sizeof(s64)) + sizeof(s64)];
 	u8 buf[60 * ST_ASM330LHHX_FIFO_SAMPLE_SIZE], tag, *ptr;
 	struct iio_dev *iio_dev, *iio_dev_mlc_fifo_acc;
 	int i, err, word_len, fifo_len, read_len;
-	s64 ts_irq, hw_ts_old;
 	__le16 fifo_status;
 	u16 fifo_depth;
+	s64 hw_ts_old;
 	s16 drdymask;
+	s64 ts_irq;
 	s64 delta;
 	u32 val;
 
@@ -293,8 +305,6 @@ int st_asm330lhhx_read_fifo(struct st_asm330lhhx_hw *hw)
 
 		return 0;
 	}
-
-	ts_irq = hw->ts - hw->delta_ts;
 
 	err = st_asm330lhhx_read_locked(hw, ST_ASM330LHHX_REG_FIFO_STATUS1_ADDR,
 				       &fifo_status, sizeof(fifo_status));
@@ -308,8 +318,15 @@ int st_asm330lhhx_read_fifo(struct st_asm330lhhx_hw *hw)
 
 	fifo_len = fifo_depth * ST_ASM330LHHX_FIFO_SAMPLE_SIZE;
 	read_len = 0;
-
+	ts_irq = hw->ts - hw->delta_ts;
 	delta = div_s64(hw->delta_ts, fifo_depth);
+
+	if (hw->resuming && notify) {
+		/* take approx wake-up timestamp event */
+		hw->ts_offset_resume = st_asm330lhhx_get_time_ns();
+		hw->ts_offset_resume -= ((fifo_depth >> hw->resume_sample_in_packet) *
+				hw->resume_sample_tick_ns);
+	}
 
 	while (read_len < fifo_len) {
 		word_len = min_t(int, fifo_len - read_len, sizeof(buf));
@@ -358,21 +375,24 @@ int st_asm330lhhx_read_fifo(struct st_asm330lhhx_hw *hw)
 					continue;
 				}
 
-				sensor = iio_priv(iio_dev);
 				memcpy(iio_buf, ptr, ST_ASM330LHHX_SAMPLE_SIZE);
 
-				ts = hw->hw_ts + hw->ts_offset;
-
-#ifdef CONFIG_IIO_ST_ASM330LHHX_MLC
-				if (hw->resuming) {
+#ifdef CONFIG_IIO_ST_ASM330LHHX_MAY_WAKEUP
+				if (hw->resuming && notify) {
 					iio_dev_mlc_fifo_acc = hw->iio_devs[
 						ST_ASM330LHHX_ID_FIFO_MLC];
 					iio_push_to_buffers_with_timestamp(
 							iio_dev_mlc_fifo_acc,
-								iio_buf, ts);
+							iio_buf,
+							hw->ts_offset_resume);
+					hw->ts_offset_resume += hw->resume_sample_tick_ns;
+				
 				} else {
-#endif /* CONFIG_IIO_ST_ASM330LHHX_MLC */
-				/* decimation for ODR < 12.5 Hz on SHUB */
+#endif /* CONFIG_IIO_ST_ASM330LHHX_MAY_WAKEUP */
+					sensor = iio_priv(iio_dev);
+					ts = hw->hw_ts + hw->ts_offset;
+
+					/* decimation for ODR < 12.5 Hz on SHUB */
 					if (sensor->dec_counter > 0) {
 						sensor->dec_counter--;
 					} else {
@@ -385,18 +405,26 @@ int st_asm330lhhx_read_fifo(struct st_asm330lhhx_hw *hw)
 					store_acc_gyro_boot_sample(iio_dev,
 							iio_buf, ts);
 
-						sensor->last_fifo_timestamp =
-							ts;
+					sensor->last_fifo_timestamp = ts;
 					}
-#ifdef CONFIG_IIO_ST_ASM330LHHX_MLC
+#ifdef CONFIG_IIO_ST_ASM330LHHX_MAY_WAKEUP
 				}
-#endif /* CONFIG_IIO_ST_ASM330LHHX_MLC */
+#endif /* CONFIG_IIO_ST_ASM330LHHX_MAY_WAKEUP */
 			}
 		}
 		read_len += word_len;
 	}
 
-	hw->resuming = false;
+	if (hw->resuming && notify) {
+		iio_dev_mlc_fifo_acc = hw->iio_devs[
+			ST_ASM330LHHX_ID_FIFO_MLC];
+		u8 iio_last_buf[16] = {0};  
+		s64 last_ts = 0xFFFFFFFF;
+		iio_push_to_buffers_with_timestamp(
+				iio_dev_mlc_fifo_acc,
+				iio_last_buf, last_ts);
+		pm_wakeup_ws_event(hw->ws, st_asm330lhhx_wakeup_ms, true);
+        }
 
 	return read_len;
 }
@@ -469,7 +497,7 @@ ssize_t st_asm330lhhx_flush_fifo(struct device *dev,
 	hw->delta_ts = ts - hw->ts;
 	hw->ts = ts;
 	set_bit(ST_ASM330LHHX_HW_FLUSH, &hw->state);
-	count = st_asm330lhhx_read_fifo(hw);
+	count = st_asm330lhhx_read_fifo(hw, 0);
 	sensor->dec_counter = 0;
 	if (count > 0)
 		fts = sensor->last_fifo_timestamp;
@@ -488,14 +516,8 @@ ssize_t st_asm330lhhx_flush_fifo(struct device *dev,
 
 int st_asm330lhhx_suspend_fifo(struct st_asm330lhhx_hw *hw)
 {
-	int err;
-
-	mutex_lock(&hw->fifo_lock);
-	st_asm330lhhx_read_fifo(hw);
-	err = st_asm330lhhx_set_fifo_mode(hw, ST_ASM330LHHX_FIFO_BYPASS);
-	mutex_unlock(&hw->fifo_lock);
-
-	return err;
+	st_asm330lhhx_read_fifo(hw, 0);
+	return st_asm330lhhx_set_fifo_mode(hw, ST_ASM330LHHX_FIFO_BYPASS);
 }
 
 int st_asm330lhhx_update_batching(struct iio_dev *iio_dev, bool enable)
@@ -608,17 +630,21 @@ static irqreturn_t st_asm330lhhx_handler_irq(int irq, void *private)
 static irqreturn_t st_asm330lhhx_handler_thread(int irq, void *private)
 {
 	struct st_asm330lhhx_hw *hw = (struct st_asm330lhhx_hw *)private;
+	int notify = 0;
+
+	mutex_lock(&hw->handler_lock);
 	if (hw->asm330_hrtimer)
 		st_asm330lhhx_set_cpu_idle_state(false);
 
 #ifdef CONFIG_IIO_ST_ASM330LHHX_MLC
-	st_asm330lhhx_mlc_check_status(hw);
+	notify=st_asm330lhhx_mlc_check_status(hw);
 #endif /* CONFIG_IIO_ST_ASM330LHHX_MLC */
 
 	mutex_lock(&hw->fifo_lock);
-	st_asm330lhhx_read_fifo(hw);
+	st_asm330lhhx_read_fifo(hw, notify);
 	clear_bit(ST_ASM330LHHX_HW_FLUSH, &hw->state);
 	mutex_unlock(&hw->fifo_lock);
+	mutex_unlock(&hw->handler_lock);
 
 	return IRQ_HANDLED;
 }
