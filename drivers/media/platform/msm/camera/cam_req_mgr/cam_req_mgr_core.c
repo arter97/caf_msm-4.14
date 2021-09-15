@@ -1,4 +1,4 @@
-/* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -365,6 +365,7 @@ static void __cam_req_mgr_reset_req_slot(struct cam_req_mgr_core_link *link,
 	slot->req_id = -1;
 	slot->skip_idx = 0;
 	slot->recover = 0;
+	slot->adjust_timeout = 0;
 	slot->sync_mode = CAM_REQ_MGR_SYNC_MODE_NO_SYNC;
 	slot->status = CRM_SLOT_STATUS_NO_REQ;
 
@@ -375,6 +376,68 @@ static void __cam_req_mgr_reset_req_slot(struct cam_req_mgr_core_link *link,
 		tbl->slot[idx].req_ready_map = 0;
 		tbl->slot[idx].state = CRM_REQ_STATE_EMPTY;
 		tbl = tbl->next;
+	}
+}
+
+/**
+ * __cam_req_mgr_validate_crm_sof_wd_timer()
+ *
+ * @brief    : Validate/modify the wd timer based on associated
+ *             timeout with the request
+ * @link     : link pointer
+ *
+ */
+static void __cam_req_mgr_validate_crm_sof_wd_timer(
+	struct cam_req_mgr_core_link *link)
+{
+	int idx = 0;
+	int next_frame_adjust_timeout = 0, current_frame_adjust_timeout = 0;
+	struct cam_req_mgr_req_queue *in_q = link->req.in_q;
+
+	idx = in_q->rd_idx;
+	__cam_req_mgr_dec_idx(
+		&idx, (link->max_delay - 1),
+		in_q->num_slots);
+	next_frame_adjust_timeout = in_q->slot[idx].adjust_timeout;
+	CAM_DBG(CAM_CRM,
+		"rd_idx: %d idx: %d next_frame_timeout: %d ms",
+		in_q->rd_idx, idx, next_frame_adjust_timeout);
+
+	idx = in_q->rd_idx;
+	__cam_req_mgr_dec_idx(
+		&idx, link->max_delay,
+		in_q->num_slots);
+	current_frame_adjust_timeout = in_q->slot[idx].adjust_timeout;
+	CAM_DBG(CAM_CRM,
+		"rd_idx: %d idx: %d current_frame_timeout: %d ms",
+		in_q->rd_idx, idx, current_frame_adjust_timeout);
+
+	if ((next_frame_adjust_timeout + CAM_REQ_MGR_WATCHDOG_TIMEOUT) >
+		link->watchdog->expires) {
+		CAM_DBG(CAM_CRM,
+			"Modifying wd timer expiry from %d ms to %d ms",
+			link->watchdog->expires,
+			(next_frame_adjust_timeout +
+			CAM_REQ_MGR_WATCHDOG_TIMEOUT));
+		crm_timer_modify(link->watchdog,
+			next_frame_adjust_timeout +
+			CAM_REQ_MGR_WATCHDOG_TIMEOUT);
+	} else if (current_frame_adjust_timeout) {
+		CAM_DBG(CAM_CRM,
+			"Reset wd timer to current frame from %d ms to %d ms",
+			link->watchdog->expires,
+			(current_frame_adjust_timeout +
+			CAM_REQ_MGR_WATCHDOG_TIMEOUT));
+		crm_timer_modify(link->watchdog,
+			current_frame_adjust_timeout +
+			CAM_REQ_MGR_WATCHDOG_TIMEOUT);
+	} else if (link->watchdog->expires >
+		CAM_REQ_MGR_WATCHDOG_TIMEOUT) {
+		CAM_DBG(CAM_CRM,
+			"Reset wd timer to default from %d ms to %d ms",
+			link->watchdog->expires, CAM_REQ_MGR_WATCHDOG_TIMEOUT);
+		crm_timer_modify(link->watchdog,
+			CAM_REQ_MGR_WATCHDOG_TIMEOUT);
 	}
 }
 
@@ -1211,9 +1274,11 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 	 * - if in applied_state, somthign wrong.
 	 * - if in no_req state, no new req
 	 */
-	CAM_DBG(CAM_REQ, "SOF Req[%lld] idx %d req_status %d link_hdl %x",
+	CAM_DBG(CAM_REQ,
+		"SOF Req[%lld] idx %d req_status %d link_hdl %x  wd_timeout %d ms",
 		in_q->slot[in_q->rd_idx].req_id, in_q->rd_idx,
-		in_q->slot[in_q->rd_idx].status, link->link_hdl);
+		in_q->slot[in_q->rd_idx].status, link->link_hdl,
+		in_q->slot[in_q->rd_idx].adjust_timeout);
 
 	slot = &in_q->slot[in_q->rd_idx];
 	if (slot->status == CRM_SLOT_STATUS_NO_REQ) {
@@ -1315,6 +1380,9 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 		slot->status = CRM_SLOT_STATUS_REQ_PENDING;
 	} else {
 		link->trigger_mask |= trigger;
+
+		/* validate and adjust SOF timer */
+		__cam_req_mgr_validate_crm_sof_wd_timer(link);
 
 		CAM_DBG(CAM_CRM, "Applied req[%lld] on link[%x] success",
 			slot->req_id, link->link_hdl);
@@ -1987,6 +2055,7 @@ int cam_req_mgr_process_flush_req(void *priv, void *data)
 				mutex_unlock(&link->req.lock);
 				return -EINVAL;
 			}
+			slot->adjust_timeout = 0;
 			__cam_req_mgr_in_q_skip_idx(in_q, idx);
 		}
 	}
@@ -2038,10 +2107,11 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 	in_q = link->req.in_q;
 
 	CAM_DBG(CAM_CRM,
-		"link_hdl %x req_id %lld at slot %d sync_mode %d is_master:%d",
+		"link_hdl %x req_id %lld at slot %d sync_mode %d is_master:%d exp_timeout_val %d ms",
 		sched_req->link_hdl, sched_req->req_id,
 		in_q->wr_idx, sched_req->sync_mode,
-		link->is_master);
+		link->is_master,
+		sched_req->adjust_timeout);
 
 	mutex_lock(&link->req.lock);
 	slot = &in_q->slot[in_q->wr_idx];
@@ -2055,6 +2125,17 @@ int cam_req_mgr_process_sched_req(void *priv, void *data)
 	slot->sync_mode = sched_req->sync_mode;
 	slot->skip_idx = 0;
 	slot->recover = sched_req->bubble_enable;
+
+	if (sched_req->adjust_timeout > CAM_REQ_MGR_WATCHDOG_TIMEOUT) {
+		CAM_WARN(CAM_CRM,
+			"Requested timeout [%dms] max supported timeout [%dms] resetting to max",
+			sched_req->adjust_timeout,
+			CAM_REQ_MGR_WATCHDOG_TIMEOUT);
+			slot->adjust_timeout = CAM_REQ_MGR_WATCHDOG_TIMEOUT;
+	} else {
+		slot->adjust_timeout = sched_req->adjust_timeout;
+	}
+
 	link->open_req_cnt++;
 	__cam_req_mgr_inc_idx(&in_q->wr_idx, 1, in_q->num_slots);
 
@@ -3299,6 +3380,7 @@ int cam_req_mgr_schedule_request(
 	sched->req_id = sched_req->req_id;
 	sched->sync_mode = sched_req->sync_mode;
 	sched->link_hdl = sched_req->link_hdl;
+	sched->adjust_timeout = sched_req->adjust_timeout;
 	if (session->force_err_recovery == AUTO_RECOVERY) {
 		sched->bubble_enable = sched_req->bubble_enable;
 	} else {

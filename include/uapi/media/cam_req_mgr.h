@@ -184,6 +184,8 @@ struct cam_req_mgr_flush_info {
  * @bubble_enable: Input Param - Cam req mgr will do bubble recovery if this
  * flag is set.
  * @sync_mode: Type of Sync mode for this request
+ * @adjust_timeout: adjust timeout value (in ms) associated with this request
+ * @reserved: Reserved
  * @req_id: Input Param - Request Id from which all requests will be flushed
  */
 struct cam_req_mgr_sched_request {
@@ -191,6 +193,8 @@ struct cam_req_mgr_sched_request {
 	int32_t link_hdl;
 	int32_t bubble_enable;
 	int32_t sync_mode;
+	int32_t adjust_timeout;
+	int32_t reserved;
 	int64_t req_id;
 };
 
