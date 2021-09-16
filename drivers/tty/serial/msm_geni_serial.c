@@ -1752,7 +1752,7 @@ static void stop_tx_sequencer(struct uart_port *uport)
 			atomic_set(&port->xfer_inprogress, 0);
 		}
 		dmaengine_terminate_all(port->gsi->tx_c);
-		return;
+		goto out;
 	}
 	geni_status = geni_read_reg_nolog(uport->membase, SE_GENI_STATUS);
 	/* Possible stop tx is called multiple times. */
@@ -1820,6 +1820,7 @@ static void stop_tx_sequencer(struct uart_port *uport)
 	port->m_cmd = false;
 	port->xmit_size = 0;
 
+out:
 	/*
 	 * If we end up having to cancel an on-going Tx for non-console usecase
 	 * then it means there was some unsent data in the Tx FIFO, consequently
