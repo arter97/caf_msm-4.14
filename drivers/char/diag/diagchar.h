@@ -550,6 +550,8 @@ struct diag_md_session_t {
 	struct diag_mask_info *log_mask;
 	struct diag_mask_info *event_mask;
 	struct task_struct *task;
+	uint8_t sleep_request;
+	uint8_t mask_clear_initiated;
 };
 
 /*

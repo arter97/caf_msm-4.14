@@ -482,6 +482,7 @@ static void diag_close_logging_process(const int pid)
 	int session_mask = 0;
 	int device_mask = 0;
 	uint32_t p_mask = 0;
+	uint8_t sleep_req = 0;
 	struct diag_md_session_t *session_info = NULL;
 	struct diag_logging_mode_param_t params;
 
@@ -512,10 +513,29 @@ static void diag_close_logging_process(const int pid)
 			device_mask = device_mask | (1 << i);
 		}
 	}
+	sleep_req = session_info->sleep_request;
+	if(sleep_req)
+		session_info->mask_clear_initiated = 1;
 	mutex_unlock(&driver->md_session_lock);
 
-	if (diag_mask_clear_param)
+	if (diag_mask_clear_param) {
 		diag_clear_masks(pid);
+		/**
+		 * sleep for 3sec before switching the logging mode
+		 * only if this is not a graceful session close.
+		 * sleep_req will be 1 for abrupt md session close.
+		 * This will help to drain the pending packets on
+		 * underlying transport layer.
+		 */
+		if (sleep_req) {
+			/* flush already queued diag buffers from md session if any */
+			diag_md_flush_buffers(DIAG_MD_LOCAL);
+			DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+			"diag: %s[%d] Sleeping for 3sec to drain and drop pending data\n",
+			current->comm, current->tgid);
+			usleep_range(3000000, 3001000);
+		}
+	}
 
 	mutex_lock(&driver->diagchar_mutex);
 	if (session_mask)
@@ -1379,6 +1399,7 @@ int diag_md_session_create(int mode, int peripheral_mask, int proc)
 		new_session->peripheral_mask[proc] = 0;
 		new_session->pid = current->tgid;
 		new_session->task = current;
+		new_session->sleep_request = 1;
 		new_session->log_mask = kzalloc(sizeof(struct diag_mask_info),
 					GFP_KERNEL);
 		if (!new_session->log_mask) {
@@ -2117,6 +2138,7 @@ static int diag_ioctl_dci_event_status(unsigned long ioarg)
 
 static int diag_ioctl_lsm_deinit(void)
 {
+	struct diag_md_session_t *session_info = NULL;
 	int i;
 
 	mutex_lock(&driver->diagchar_mutex);
@@ -2128,6 +2150,17 @@ static int diag_ioctl_lsm_deinit(void)
 		mutex_unlock(&driver->diagchar_mutex);
 		return -EINVAL;
 	}
+
+	mutex_lock(&driver->md_session_lock);
+	session_info = diag_md_session_get_pid(current->tgid);
+	/**
+	 * reset sleep request on graceful md session exit ,so that
+	 * sleep API won't get called before switching logging mode
+	 */
+	if (session_info)
+		session_info->sleep_request = 0;
+	mutex_unlock(&driver->md_session_lock);
+
 	if (!(driver->data_ready[i] & DEINIT_TYPE)) {
 		driver->data_ready[i] |= DEINIT_TYPE;
 		atomic_inc(&driver->data_ready_notif[i]);
