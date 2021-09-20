@@ -47,4 +47,5 @@ int diag_md_close_peripheral(int id, uint8_t peripheral);
 int diag_md_write(int id, unsigned char *buf, int len, int ctx);
 int diag_md_copy_to_user(char __user *buf, int *pret, size_t buf_size,
 			 struct diag_md_session_t *info);
+void diag_md_flush_buffers(int id);
 #endif
