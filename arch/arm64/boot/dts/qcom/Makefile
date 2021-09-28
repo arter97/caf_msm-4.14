@@ -539,6 +539,7 @@ ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 		sdm660-cdp-external-codec-overlay.dtbo \
 		sdm660-cdp-internal-codec-overlay.dtbo \
 		sdm660-qrd-external-codec-overlay.dtbo \
+		sdm660-qrd-dsi-rm67195-amoled-overlay.dtbo \
 		sdm660-rcm-external-codec-overlay.dtbo \
 		sdm660-rcm-internal-codec-overlay.dtbo \
 		sda660-mtp-external-codec-overlay.dtbo \
@@ -555,6 +556,8 @@ sdm660-cdp-external-codec-overlay.dtbo-base := sdm660-pm660l.dtb
 sdm660-cdp-internal-codec-overlay.dtbo-base := sdm660-pm660l.dtb
 
 sdm660-qrd-external-codec-overlay.dtbo-base := sdm660-pm660l.dtb
+
+sdm660-qrd-dsi-rm67195-amoled-overlay.dtbo-base := sdm660-pm660a.dtb
 
 sdm660-rcm-external-codec-overlay.dtbo-base := sdm660-pm660l.dtb
 
@@ -596,7 +599,8 @@ dtb-$(CONFIG_ARCH_SDM660) += sdm660-sim.dtb \
 	sdm660-pm660a-headset-jacktype-no-cdp.dtb \
 	sdm660-pm660a-headset-jacktype-no-rcm.dtb \
 	sdm660-usbc-audio-mtp.dtb \
-	sdm660-usbc-audio-rcm.dtb
+	sdm660-usbc-audio-rcm.dtb \
+	sdm660-qrd-dsi-rm67195-amoled.dtb
 endif
 
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
