@@ -98,62 +98,19 @@ void diag_md_open_device(int id)
 		ch->ops->open(ch->ctx, DIAG_MEMORY_DEVICE_MODE);
 
 }
-void diag_md_close_all(void)
+
+void diag_md_flush_buffers(int id)
 {
-	int i, j;
-	unsigned long flags;
-	struct diag_md_info *ch = NULL;
 	struct diag_buf_tbl_t *entry = NULL;
-
-	for (i = 0; i < NUM_DIAG_MD_DEV; i++) {
-		ch = &diag_md[i];
-		if (!ch->md_info_inited)
-			continue;
-
-		if (ch->ops && ch->ops->close)
-			ch->ops->close(ch->ctx, DIAG_MEMORY_DEVICE_MODE);
-
-		/*
-		 * When we close the Memory device mode, make sure we flush the
-		 * internal buffers in the table so that there are no stale
-		 * entries.
-		 */
-		spin_lock_irqsave(&ch->lock, flags);
-		for (j = 0; j < ch->num_tbl_entries; j++) {
-			entry = &ch->tbl[j];
-			if (entry->len <= 0)
-				continue;
-			if (ch->ops && ch->ops->write_done)
-				ch->ops->write_done(entry->buf, entry->len,
-						    entry->ctx,
-						    DIAG_MEMORY_DEVICE_MODE);
-			entry->buf = NULL;
-			entry->len = 0;
-			entry->ctx = 0;
-		}
-		spin_unlock_irqrestore(&ch->lock, flags);
-	}
-
-	diag_ws_reset(DIAG_WS_MUX);
-}
-void diag_md_close_device(int id)
-{
-	int  j;
-	unsigned long flags;
 	struct diag_md_info *ch = NULL;
-	struct diag_buf_tbl_t *entry = NULL;
+	unsigned long flags = 0;
+	int j;
 
 	ch = &diag_md[id];
 	if (!ch->md_info_inited)
 		return;
 
-	if (ch->ops && ch->ops->close)
-		ch->ops->close(ch->ctx, DIAG_MEMORY_DEVICE_MODE);
-
-	/*
-	 * When we close the Memory device mode, make sure we flush the
-	 * internal buffers in the table so that there are no stale
-	 * entries.
+	/**
 	 * Give Write_done notifications to buffers with packets
 	 * indicated valid length.
 	 */
@@ -171,6 +128,48 @@ void diag_md_close_device(int id)
 		entry->ctx = 0;
 	}
 	spin_unlock_irqrestore(&ch->lock, flags);
+}
+
+void diag_md_close_all(void)
+{
+	int i;
+	struct diag_md_info *ch = NULL;
+
+	for (i = 0; i < NUM_DIAG_MD_DEV; i++) {
+		ch = &diag_md[i];
+		if (!ch->md_info_inited)
+			continue;
+
+		if (ch->ops && ch->ops->close)
+			ch->ops->close(ch->ctx, DIAG_MEMORY_DEVICE_MODE);
+
+		/*
+		 * When we close the Memory device mode, make sure we flush the
+		 * internal buffers in the table so that there are no stale
+		 * entries.
+		 */
+		diag_md_flush_buffers(i);
+	}
+
+	diag_ws_reset(DIAG_WS_MUX);
+}
+void diag_md_close_device(int id)
+{
+	struct diag_md_info *ch = NULL;
+
+	ch = &diag_md[id];
+	if (!ch->md_info_inited)
+		return;
+
+	if (ch->ops && ch->ops->close)
+		ch->ops->close(ch->ctx, DIAG_MEMORY_DEVICE_MODE);
+
+	/*
+	 * When we close the Memory device mode, make sure we flush the
+	 * internal buffers in the table so that there are no stale
+	 * entries.
+	 */
+	diag_md_flush_buffers(id);
 	diag_ws_reset(DIAG_WS_MUX);
 }
 
@@ -227,6 +226,19 @@ int diag_md_write(int id, unsigned char *buf, int len, int ctx)
 	if (!session_info) {
 		mutex_unlock(&driver->md_session_lock);
 		return -EIO;
+	}
+
+	/**
+	 * Don't accept further packets to this session if mask clear
+	 * is already initiated for this session. mask_clear_initiated will
+	 * be set only after sending mask clear commands to peripheral
+	 */
+	if(session_info->mask_clear_initiated) {
+		DIAG_LOG(DIAG_DEBUG_MUX,
+		"diag: Dropping the packet queued to md_session pid: %d\n",
+		session_info->pid);
+		mutex_unlock(&driver->md_session_lock);
+		return -EINVAL;
 	}
 
 	pid = session_info->pid;
