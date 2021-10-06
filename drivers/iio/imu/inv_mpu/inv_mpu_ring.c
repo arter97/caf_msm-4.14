@@ -26,6 +26,7 @@
 #include <linux/poll.h>
 #include <linux/math64.h>
 #include <linux/miscdevice.h>
+#include <uapi/linux/sched/types.h>
 
 #include "inv_mpu_iio.h"
 
@@ -600,6 +601,19 @@ static irqreturn_t inv_irq_handler(int irq, void *dev_id)
 	return IRQ_WAKE_THREAD;
 }
 
+static void inv_kthread_batch_work(struct kthread_work *ws)
+{
+	struct inv_mpu_state *st =
+		container_of(ws, struct inv_mpu_state, hrtimer_work);
+	struct iio_dev *indio_dev = iio_priv_to_dev(st);
+
+	mutex_lock(&indio_dev->mlock);
+	if (inv_plat_single_write(st, REG_INT_ENABLE,
+				st->int_en | BIT_DATA_RDY_EN))
+		pr_err("kthread REG_INT_ENABLE write error\n");
+	mutex_unlock(&indio_dev->mlock);
+}
+
 #ifdef TIMER_BASED_BATCHING
 static enum hrtimer_restart inv_batch_timer_handler(struct hrtimer *timer)
 {
@@ -609,7 +623,8 @@ static enum hrtimer_restart inv_batch_timer_handler(struct hrtimer *timer)
 	if (st->chip_config.gyro_enable || st->chip_config.accel_enable) {
 		hrtimer_forward_now(&st->hr_batch_timer,
 			ns_to_ktime(st->batch_timeout));
-		schedule_work(&st->batch_work);
+		//schedule_work(&st->batch_work);
+		kthread_queue_work(&st->kworker, &st->hrtimer_work);
 		return HRTIMER_RESTART;
 	}
 	st->is_batch_timer_running = 0;
@@ -654,10 +669,21 @@ int inv_mpu_configure_ring(struct iio_dev *indio_dev)
 	struct iio_buffer *ring;
 
 #ifdef TIMER_BASED_BATCHING
+	struct sched_param sched_param = { .sched_priority = MAX_RT_PRIO / 2 };
 	/* configure hrtimer */
 	hrtimer_init(&st->hr_batch_timer, CLOCK_BOOTTIME, HRTIMER_MODE_REL);
 	st->hr_batch_timer.function = inv_batch_timer_handler;
-	INIT_WORK(&st->batch_work, inv_batch_work);
+	//INIT_WORK(&st->batch_work, inv_batch_work);
+
+	kthread_init_worker(&st->kworker);
+	kthread_init_work(&st->hrtimer_work, inv_kthread_batch_work);
+	st->kworker_task = kthread_run(kthread_worker_fn, &st->kworker,
+			"iam20680");
+	if (IS_ERR(st->kworker_task)) {
+		pr_err("kworker for iam failed\n");
+		return -ENOMEM;
+	}
+	sched_setscheduler(st->kworker_task, SCHED_FIFO, &sched_param);
 #endif
 #ifdef KERNEL_VERSION_4_X
 	ring = devm_iio_kfifo_allocate(st->dev);
