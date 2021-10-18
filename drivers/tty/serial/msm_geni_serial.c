@@ -257,6 +257,8 @@ struct msm_geni_serial_port {
 	struct completion xfer;
 	struct completion tx_xfer;
 	unsigned int count;
+	atomic_t xfer_inprogress;
+	spinlock_t tx_lock;
 };
 
 static const struct uart_ops msm_geni_serial_pops;
@@ -285,6 +287,8 @@ static int msm_geni_serial_get_ver_info(struct uart_port *uport);
 static void msm_geni_serial_ssr_down(struct device *dev);
 static void msm_geni_serial_ssr_up(struct device *dev);
 static bool handle_rx_dma_xfer(u32 s_irq_status, struct uart_port *uport);
+
+static bool is_earlycon;
 
 #define GET_DEV_PORT(uport) \
 	container_of(uport, struct msm_geni_serial_port, uport)
@@ -333,7 +337,14 @@ static int msm_geni_serial_spinlocked(struct uart_port *uport)
 static void msm_geni_serial_enable_interrupts(struct uart_port *uport)
 {
 	unsigned int geni_m_irq_en, geni_s_irq_en;
-	struct msm_geni_serial_port *port = GET_DEV_PORT(uport);
+	struct msm_geni_serial_port *port = NULL;
+
+	/*
+	 * Earlyconsole also uses this API and finds port is NULL,
+	 * hence add a protective check.
+	 */
+	if (!is_earlycon)
+		port = GET_DEV_PORT(uport);
 
 	geni_m_irq_en = geni_read_reg_nolog(uport->membase,
 						SE_GENI_M_IRQ_EN);
@@ -345,7 +356,7 @@ static void msm_geni_serial_enable_interrupts(struct uart_port *uport)
 
 	geni_write_reg_nolog(geni_m_irq_en, uport->membase, SE_GENI_M_IRQ_EN);
 	geni_write_reg_nolog(geni_s_irq_en, uport->membase, SE_GENI_S_IRQ_EN);
-	if (port->xfer_mode == SE_DMA) {
+	if (port && port->xfer_mode == SE_DMA) {
 		geni_write_reg_nolog(DMA_TX_IRQ_BITS, uport->membase,
 							SE_DMA_TX_IRQ_EN_SET);
 		geni_write_reg_nolog(DMA_RX_IRQ_BITS |
@@ -488,7 +499,7 @@ static bool device_pending_suspend(struct uart_port *uport)
 {
 	int usage_count = atomic_read(&uport->dev->power.usage_count);
 
-	return (pm_runtime_status_suspended(uport->dev) || !usage_count);
+	return (pm_runtime_status_suspended(uport->dev) && !usage_count);
 }
 
 static bool check_transfers_inflight(struct uart_port *uport)
@@ -1257,6 +1268,7 @@ static void msm_geni_uart_gsi_tx_cb(void *ptr)
 			IPC_LOG_MSG(msm_port->ipc_log_misc,
 				"%s.Tx sent out, Power off\n", __func__);
 			msm_geni_serial_power_off(uport);
+			atomic_set(&msm_port->xfer_inprogress, 0);
 		}
 		uart_write_wakeup(uport);
 	}
@@ -1648,6 +1660,17 @@ static void msm_geni_serial_start_tx(struct uart_port *uport)
 		return;
 	}
 
+	spin_lock(&msm_port->tx_lock);
+	if (msm_port->xfer_mode == GSI_DMA && (msm_port->tx_dma
+				|| atomic_read(&msm_port->xfer_inprogress))) {
+		IPC_LOG_MSG(msm_port->ipc_log_misc,
+				"%s: TX xfer is inprogress\n", __func__);
+		spin_unlock(&msm_port->tx_lock);
+		return;
+	}
+	atomic_set(&msm_port->xfer_inprogress, 1);
+	spin_unlock(&msm_port->tx_lock);
+
 	if (!uart_console(uport) && !pm_runtime_active(uport->dev)) {
 		IPC_LOG_MSG(msm_port->ipc_log_misc,
 				"%s.Putting in async RPM vote\n", __func__);
@@ -1717,6 +1740,12 @@ static void stop_tx_sequencer(struct uart_port *uport)
 	}
 
 	if (port->xfer_mode == GSI_DMA) {
+		if (port->tx_dma) {
+			geni_se_tx_dma_unprep(port->wrapper_dev,
+				port->tx_dma, port->xmit_size);
+			port->tx_dma = (dma_addr_t)NULL;
+			atomic_set(&port->xfer_inprogress, 0);
+		}
 		dmaengine_terminate_all(port->gsi->tx_c);
 		return;
 	}
@@ -3469,6 +3498,7 @@ msm_geni_serial_earlycon_setup(struct earlycon_device *dev,
 	unsigned long clk_rate;
 	unsigned long cfg0, cfg1;
 
+	is_earlycon = true;
 	if (!uport->membase) {
 		ret = -ENOMEM;
 		goto exit_geni_serial_earlyconsetup;
@@ -3995,6 +4025,7 @@ static int msm_geni_serial_probe(struct platform_device *pdev)
 	init_completion(&dev_port->s_cmd_timeout);
 	init_completion(&dev_port->xfer);
 	init_completion(&dev_port->tx_xfer);
+	spin_lock_init(&dev_port->tx_lock);
 
 	uport->irq = platform_get_irq(pdev, 0);
 	if (uport->irq < 0) {
@@ -4093,6 +4124,13 @@ static int msm_geni_serial_probe(struct platform_device *pdev)
 		snprintf(boot_marker, sizeof(boot_marker),
 			"M - DRIVER GENI_HS_UART_%d Ready", line);
 	place_marker(boot_marker);
+
+	/*
+	 * Earlyconsole to kernel console will switch happen after
+	 * uart_add_one_port. Hence marking is_earlycon to false here.
+	 */
+	if (is_console)
+		is_earlycon = false;
 
 	IPC_LOG_MSG(dev_port->ipc_log_misc, "%s: port:%s irq:%d\n", __func__,
 		    uport->name, uport->irq);
