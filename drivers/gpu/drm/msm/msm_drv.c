@@ -1506,7 +1506,7 @@ void msm_mode_object_event_notify(struct drm_mode_object *obj,
 
 static int msm_release(struct inode *inode, struct file *filp)
 {
-	struct drm_file *file_priv = filp->private_data;
+	struct drm_file *file_priv;
 	struct drm_minor *minor;
 	struct drm_device *dev;
 	struct msm_drm_private *priv;
@@ -1527,6 +1527,7 @@ static int msm_release(struct inode *inode, struct file *filp)
         minor = file_priv->minor;
         dev = minor->dev;
         priv = dev->dev_private;
+	file_priv = filp->private_data;
 
 
 	spin_lock_irqsave(&dev->event_lock, flags);
