@@ -521,6 +521,28 @@ static void rgmii_updatel(struct qcom_ethqos *ethqos,
 	rgmii_writel(ethqos, temp, offset);
 }
 
+static void rgmii_loopback_config(void *priv_n, int loopback_en)
+{
+	struct stmmac_priv *priv = priv_n;
+	struct qcom_ethqos *ethqos;
+
+	if (!priv->plat->bsp_priv)
+		return;
+
+	ethqos = (struct qcom_ethqos *)priv->plat->bsp_priv;
+
+	if (loopback_en) {
+		rgmii_updatel(ethqos, RGMII_CONFIG_LOOPBACK_EN,
+			      RGMII_CONFIG_LOOPBACK_EN,
+			      RGMII_IO_MACRO_CONFIG);
+		ETHQOSINFO("Loopback EN Enabled\n");
+	} else {
+		rgmii_updatel(ethqos, RGMII_CONFIG_LOOPBACK_EN,
+			      0, RGMII_IO_MACRO_CONFIG);
+		ETHQOSINFO("Loopback EN Disabled\n");
+	}
+}
+
 static void rgmii_dump(struct qcom_ethqos *ethqos)
 {
 	dev_dbg(&ethqos->pdev->dev, "Rgmii register dump\n");
@@ -3023,6 +3045,7 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 	plat_dat->early_eth = ethqos->early_eth_enabled;
 	plat_dat->handle_mac_err = dwmac_qcom_handle_mac_err;
 	plat_dat->update_ahb_clk_cfg = ethqos_update_ahb_clk_cfg;
+	plat_dat->rgmii_loopback_cfg = rgmii_loopback_config;
 
 	if (of_property_read_bool(pdev->dev.of_node, "qcom,arm-smmu")) {
 		stmmac_emb_smmu_ctx.pdev_master = pdev;
