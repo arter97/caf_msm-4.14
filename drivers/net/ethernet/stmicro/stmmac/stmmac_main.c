@@ -4754,7 +4754,7 @@ int stmmac_suspend(struct device *dev)
 	stmmac_stop_all_dma(priv);
 
 	/* Enable Power down mode by programming the PMT regs */
-	if (device_may_wakeup(priv->device)) {
+	if (device_may_wakeup(priv->device) && priv->plat->pmt) {
 		priv->hw->mac->pmt(priv->hw, priv->wolopts);
 		priv->irq_wake = 1;
 	} else {
@@ -4820,7 +4820,7 @@ int stmmac_resume(struct device *dev)
 	 * this bit because it can generate problems while resuming
 	 * from another devices (e.g. serial console).
 	 */
-	if (device_may_wakeup(priv->device)) {
+	if (device_may_wakeup(priv->device) && priv->plat->pmt) {
 		mutex_lock(&priv->lock);
 		priv->hw->mac->pmt(priv->hw, 0);
 		mutex_unlock(&priv->lock);
