@@ -1384,6 +1384,9 @@ static int init_dma_rx_desc_rings(struct net_device *dev, gfp_t flags)
 			else
 				p = rx_q->dma_rx + i;
 
+			if(queue >= priv->plat->rx_queues_to_use)
+				return -EINVAL;
+
 			ret = stmmac_init_rx_buffers(priv, p, i, flags,
 						     queue);
 			if (ret)
@@ -1396,6 +1399,9 @@ static int init_dma_rx_desc_rings(struct net_device *dev, gfp_t flags)
 
 		rx_q->cur_rx = 0;
 		rx_q->dirty_rx = (unsigned int)(i - rx_q->dma_rx_desc_sz);
+
+		if(queue >= priv->plat->rx_queues_to_use)
+			return -EINVAL;
 
 		stmmac_clear_rx_descriptors(priv, queue);
 
@@ -1418,8 +1424,12 @@ static int init_dma_rx_desc_rings(struct net_device *dev, gfp_t flags)
 
 err_init_rx_buffers:
 	while (queue >= 0) {
-		while (--i >= 0)
+		while (--i >= 0) {
+			if(queue >= priv->plat->rx_queues_to_use)
+				return -EINVAL;
+
 			stmmac_free_rx_buffer(priv, queue, i);
+		}
 
 		if (queue == 0)
 			break;
