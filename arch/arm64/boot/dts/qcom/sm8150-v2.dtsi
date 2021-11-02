@@ -49,6 +49,7 @@
 };
 
 &tmc_etr {
+	status = "disabled";
 	/delete-property/ qcom,smmu-s1-bypass;
 };
 

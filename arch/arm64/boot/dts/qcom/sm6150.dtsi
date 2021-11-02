@@ -3248,3 +3248,7 @@
 &msm_audio_ion {
 	qcom,iova-start-addr = <0x20000000>;
 };
+
+&tmc_etr {
+        status = "disabled";
+};
