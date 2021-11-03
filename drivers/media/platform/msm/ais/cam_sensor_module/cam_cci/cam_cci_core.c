@@ -1532,6 +1532,8 @@ static int32_t cam_cci_read(struct v4l2_subdev *sd,
 	if (read_words != exp_words) {
 		CAM_ERR(CAM_CCI, "read_words = %d, exp words = %d",
 			read_words, exp_words);
+
+		cam_cci_flush_queue(cci_dev, master);
 		memset(read_cfg->data, 0, read_cfg->num_byte);
 		rc = -EINVAL;
 		goto rel_mutex_q;

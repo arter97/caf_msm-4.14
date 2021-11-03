@@ -68,8 +68,10 @@ struct snd_kcontrol_volatile {
 
 struct snd_kcontrol {
 	struct list_head list;		/* list of controls */
+	struct hlist_node hnode;
 	struct snd_ctl_elem_id id;
 	unsigned int count;		/* count of same elements */
+	unsigned int knametoint;        /* kctl name to uint, hash key value */
 	snd_kcontrol_info_t *info;
 	snd_kcontrol_get_t *get;
 	snd_kcontrol_put_t *put;

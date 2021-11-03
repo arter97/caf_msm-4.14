@@ -618,7 +618,7 @@ static int qpnp_rtc_probe(struct platform_device *pdev)
 	}
 
 	device_init_wakeup(&pdev->dev, 1);
-	enable_irq_wake(rtc_dd->rtc_alarm_irq);
+	enable_irq(rtc_dd->rtc_alarm_irq);
 
 	dev_dbg(&pdev->dev, "Probe success !!\n");
 
@@ -713,7 +713,7 @@ static int qpnp_rtc_restore(struct device *dev)
 		if (rc)
 			pr_err("Request IRQ failed (%d)\n", rc);
 		else
-			enable_irq_wake(rtc_dd->rtc_alarm_irq);
+			enable_irq(rtc_dd->rtc_alarm_irq);
 	}
 
 	return rc;

@@ -46,6 +46,17 @@ static LIST_HEAD(snd_control_ioctls);
 static LIST_HEAD(snd_control_compat_ioctls);
 #endif
 
+
+char tmp_kctl_name[50] = {'\0'};
+unsigned int kctl_strtoint(const char *s)
+{
+        unsigned int res = 0;
+        while (*s) {
+                res = (res << 5) - res + (*s++);
+        }
+        return (res & 0x7FFFFFFF);
+}
+
 static int snd_ctl_open(struct inode *inode, struct file *file)
 {
 	unsigned long flags;
@@ -314,38 +325,31 @@ void snd_ctl_free_one(struct snd_kcontrol *kcontrol)
 }
 EXPORT_SYMBOL(snd_ctl_free_one);
 
-static bool snd_ctl_remove_numid_conflict(struct snd_card *card,
-					  unsigned int count)
+static struct snd_kcontrol *hash_snd_ctl_find_id(struct snd_card *card,
+                               unsigned int nametoint, struct snd_ctl_elem_id *id)
 {
-	struct snd_kcontrol *kctl;
+        struct snd_kcontrol *kctl = NULL;
 
-	/* Make sure that the ids assigned to the control do not wrap around */
-	if (card->last_numid >= UINT_MAX - count)
-		card->last_numid = 0;
-
-	list_for_each_entry(kctl, &card->controls, list) {
-		if (kctl->id.numid < card->last_numid + 1 + count &&
-		    kctl->id.numid + kctl->count > card->last_numid + 1) {
-		    	card->last_numid = kctl->id.numid + kctl->count - 1;
-			return true;
-		}
+        if (snd_BUG_ON(!card || !id))
+                return NULL;
+	hash_for_each_possible(card->ctl_htab, kctl, hnode, nametoint) {
+		if (strncmp(kctl->id.name, id->name, sizeof(kctl->id.name)))
+			continue;
+		if (kctl->id.iface != id->iface)
+			continue;
+		if (kctl->id.device != id->device)
+			continue;
+		if (kctl->id.subdevice != id->subdevice)
+			continue;
+		if (kctl->id.index > id->index)
+			continue;
+		if (kctl->id.index + kctl->count <= id->index)
+			continue;
+		return kctl;
 	}
-	return false;
+        return NULL;
 }
 
-static int snd_ctl_find_hole(struct snd_card *card, unsigned int count)
-{
-	unsigned int iter = 100000;
-
-	while (snd_ctl_remove_numid_conflict(card, count)) {
-		if (--iter == 0) {
-			/* this situation is very unlikely */
-			dev_err(card->dev, "unable to allocate new control numid\n");
-			return -ENOMEM;
-		}
-	}
-	return 0;
-}
 
 /* add a new kcontrol object; call with card->controls_rwsem locked */
 static int __snd_ctl_add(struct snd_card *card, struct snd_kcontrol *kcontrol)
@@ -358,20 +362,25 @@ static int __snd_ctl_add(struct snd_card *card, struct snd_kcontrol *kcontrol)
 	if (id.index > UINT_MAX - kcontrol->count)
 		return -EINVAL;
 
-	if (snd_ctl_find_id(card, &id)) {
+	snprintf(tmp_kctl_name, strlen(kcontrol->id.name) + 6, "%s%d%d%d", kcontrol->id.name, kcontrol->id.iface, kcontrol->id.device, kcontrol->id.subdevice);
+
+	kcontrol->knametoint = kctl_strtoint(tmp_kctl_name);
+	if (kcontrol->knametoint < 0)
+		return -EINVAL;
+
+	if (hash_snd_ctl_find_id(card, kcontrol->knametoint, &id)) {
 		dev_err(card->dev,
 			"control %i:%i:%i:%s:%i is already present\n",
 			id.iface, id.device, id.subdevice, id.name, id.index);
 		return -EBUSY;
 	}
 
-	if (snd_ctl_find_hole(card, kcontrol->count) < 0)
-		return -ENOMEM;
-
 	list_add_tail(&kcontrol->list, &card->controls);
 	card->controls_count += kcontrol->count;
 	kcontrol->id.numid = card->last_numid + 1;
 	card->last_numid += kcontrol->count;
+
+	hash_add(card->ctl_htab, &kcontrol->hnode, kcontrol->knametoint);
 
 	id = kcontrol->id;
 	count = kcontrol->count;
@@ -448,7 +457,16 @@ int snd_ctl_replace(struct snd_card *card, struct snd_kcontrol *kcontrol,
 	}
 	id = kcontrol->id;
 	down_write(&card->controls_rwsem);
-	old = snd_ctl_find_id(card, &id);
+	snprintf(tmp_kctl_name, strlen(kcontrol->id.name) + 6, "%s%d%d%d", kcontrol->id.name, kcontrol->id.iface, kcontrol->id.device, kcontrol->id.subdevice);
+
+	kcontrol->knametoint = kctl_strtoint(tmp_kctl_name);
+	if (kcontrol->knametoint < 0) {
+		up_write(&card->controls_rwsem);
+		ret = -EINVAL;
+		goto error;
+	}
+
+	old = hash_snd_ctl_find_id(card, kcontrol->knametoint, &id);
 	if (!old) {
 		if (add_on_replace)
 			goto add;
@@ -462,15 +480,11 @@ int snd_ctl_replace(struct snd_card *card, struct snd_kcontrol *kcontrol,
 		goto error;
 	}
 add:
-	if (snd_ctl_find_hole(card, kcontrol->count) < 0) {
-		up_write(&card->controls_rwsem);
-		ret = -ENOMEM;
-		goto error;
-	}
 	list_add_tail(&kcontrol->list, &card->controls);
 	card->controls_count += kcontrol->count;
 	kcontrol->id.numid = card->last_numid + 1;
 	card->last_numid += kcontrol->count;
+	hash_add(card->ctl_htab, &kcontrol->hnode, kcontrol->knametoint);
 	id = kcontrol->id;
 	count = kcontrol->count;
 	up_write(&card->controls_rwsem);

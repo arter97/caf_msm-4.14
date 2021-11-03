@@ -827,7 +827,7 @@ static int ais_vfe_handle_sof(
 	CAM_DBG(CAM_ISP, "IFE%d SOF RDIs 0x%x", core_info->vfe_idx,
 			work_data->path);
 
-	for (path = 0; path <= AIS_IFE_PATH_MAX; path++) {
+	for (path = 0; path < AIS_IFE_PATH_MAX; path++) {
 
 		if (!(work_data->path & (1 << path)))
 			continue;
@@ -871,34 +871,37 @@ static int ais_vfe_handle_error(
 	bus_hw_info = core_info->vfe_hw_info->bus_hw_info;
 	bus_hw_irq_regs = bus_hw_info->common_reg.irq_reg_info.irq_reg_set;
 
-	for (path = 0; path <= AIS_IFE_PATH_MAX; path++) {
+	for (path = 0; path < AIS_IFE_PATH_MAX; path++) {
 
 		if (!(work_data->path & (1 << path)))
 			continue;
 
 		p_rdi = &core_info->rdi_out[path];
-		if (p_rdi->state != AIS_ISP_RESOURCE_STATE_STREAMING)
-			continue;
+		CAM_ERR(CAM_ISP, "IFE%d p_rdi->state = %d", p_rdi->state);
 
-		p_rdi->state = AIS_ISP_RESOURCE_STATE_ERROR;
+		if (p_rdi->state == AIS_ISP_RESOURCE_STATE_STREAMING)
+		{
+			p_rdi->state = AIS_ISP_RESOURCE_STATE_ERROR;
 
-		client_regs = &bus_hw_info->bus_client_reg[path];
+			client_regs = &bus_hw_info->bus_client_reg[path];
 
-		/* Disable WM and reg-update */
-		cam_io_w_mb(0x0, core_info->mem_base + client_regs->cfg);
-		cam_io_w_mb(AIS_VFE_REGUP_RDI_ALL, core_info->mem_base +
+			/* Disable WM and reg-update */
+			cam_io_w_mb(0x0, core_info->mem_base + client_regs->cfg);
+			cam_io_w_mb(AIS_VFE_REGUP_RDI_ALL, core_info->mem_base +
 				top_hw_info->common_reg->reg_update_cmd);
-		cam_io_w_mb((1 << path), core_info->mem_base +
-					bus_hw_info->common_reg.sw_reset);
+			cam_io_w_mb((1 << path), core_info->mem_base +
+				bus_hw_info->common_reg.sw_reset);
 
-		core_info->bus_wr_mask1 &= ~(1 << path);
-		cam_io_w_mb(core_info->bus_wr_mask1,
-			core_info->mem_base +
-			bus_hw_irq_regs[1].mask_reg_offset);
+			core_info->bus_wr_mask1 &= ~(1 << path);
+			cam_io_w_mb(core_info->bus_wr_mask1,
+				core_info->mem_base +
+				bus_hw_irq_regs[1].mask_reg_offset);
+		}
 
 		core_info->event.type = AIS_IFE_MSG_OUTPUT_ERROR;
 		core_info->event.path = path;
 
+	        CAM_ERR(CAM_ISP, "IFE%d ERROR event_cb called", core_info->vfe_idx);
 		core_info->event_cb(core_info->event_cb_priv,
 				&core_info->event);
 	}

@@ -50,6 +50,7 @@ static char init_prog[128] = "/early_services/init_early";
 static char *init_prog_argv[2] = { init_prog, NULL };
 static int es_status; /*1= es mount is success 0= es failed to run*/
 #define EARLY_SERVICES_MOUNT_POINT "/early_services"
+#define FIRMWARE_MOUNT_PATH "/early_services/vendor/firmware_mnt"
 #endif
 dev_t ROOT_DEV;
 
@@ -617,41 +618,53 @@ int get_early_services_status(void)
 	return es_status;
 }
 
-static int mount_partition(char *part_name, char *mnt_point)
+static int mount_partition(char *part_name, char *mnt_point, void *data, char *fs_name)
 {
-	struct page *page = alloc_page(GFP_KERNEL);
-	char *fs_names = page_address(page);
+	struct page *page;
+	char *fs_names;
 	char *p;
 	int err = -EPERM;
+        int retry_cnt;
 
 	if (!part_name[0]) {
 		pr_err("Unknown partition\n");
 		return -ENOENT;
 	}
-
+        if(fs_name != NULL){
+	fs_names = fs_name;
+	}
+	else {
+	page = alloc_page(GFP_KERNEL);
+	fs_names = page_address(page);
 	get_fs_names_runtime(fs_names);
-	for (p = fs_names; *p; p += strlen(p)+1) {
-RETRY:
+	}
+
+	for(retry_cnt = 0; retry_cnt < 31 ; retry_cnt++) {
+	    for (p = fs_names; *p; p += strlen(p)+1) {
 		err = do_mount_part(part_name, p, root_mountflags,
-					NULL, mnt_point);
+					data, mnt_point);
+		printk( KERN_ERR "mounting firmwaremnt %d) %s %d  %s %s\n",retry_cnt, part_name, err,p,(char *)data);
 		switch (err) {
 		case 0:
-			return err;
 		case -EACCES:
+		case -EBUSY:
+			goto GODOWN;
 		case -EINVAL:
-			continue;
                 case -ENOENT:
                        msleep_interruptible(1);
-                       goto RETRY;
 		}
-		return err;
+	    }
 	}
+GODOWN:
 	return err;
 }
 void launch_early_services(void)
 {
 	int rc = 0;
 	dev_t EARLY_USERSPACE_DEV;
+	char option[] = "context=u:object_r:firmware_file:s0";
+	char fw_fs_name[8] =  {'v','f','a','t',0,0};
+	char es_fs_name[8] =  {'e','x','t','4',0,0};
 
 	early_userspace_dev = saved_early_userspace;
 	EARLY_USERSPACE_DEV = name_to_dev_t(early_userspace_dev);
@@ -659,18 +672,25 @@ void launch_early_services(void)
 		early_userspace_dev += 5;
 	if (EARLY_USERSPACE_DEV == 0)
 		return;
+
 	devtmpfs_mount("dev");
 	rc = create_dev("/dev/early_userspace" , EARLY_USERSPACE_DEV);
 
 	if (!rc) {
-		rc = mount_partition("/dev/early_userspace", EARLY_SERVICES_MOUNT_POINT);
+		rc = mount_partition("/dev/early_userspace", EARLY_SERVICES_MOUNT_POINT, NULL,es_fs_name );
 		place_marker("Early Services Partition ready");
+
 		rc = call_usermodehelper(init_prog, init_prog_argv, NULL, 0);
 		if (!rc) {
 			es_status = 1;
 			pr_info("early_init launched\n");
 		} else
 			pr_err("early_init failed\n");
+
+		rc = mount_partition(saved_modem_name, FIRMWARE_MOUNT_PATH,option, fw_fs_name);
+		if (!rc) {
+			place_marker("firmwares Partition ready");
+		}
 	}
 }
 #else
