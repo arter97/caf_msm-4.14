@@ -63,8 +63,7 @@ struct st_asm330lhhx_ext_dev_settings {
 	u8 data_len;
 };
 
-static const struct st_asm330lhhx_ext_dev_settings
-	st_asm330lhhx_ext_dev_table[] = {
+static const struct st_asm330lhhx_ext_dev_settings st_asm330lhhx_ext_dev_table[] = {
 	/* LIS2MDL */
 	{
 		.i2c_addr = { 0x1e },
@@ -157,9 +156,9 @@ static const struct st_asm330lhhx_ext_dev_settings
 			.mask = BIT(1),
 		},
 		.ext_available_scan_masks = { 0x1, 0x0 },
-		.ext_channels[0] = ST_ASM330LHHX_DATA_CHANNEL(IIO_PRESSURE,
-				0x28, 0, IIO_NO_MOD, 0,
-				24, 32, 'u'),
+		.ext_channels[0] = ST_ASM330LHHX_DATA_CHANNEL(IIO_PRESSURE, 0x28,
+							      0, IIO_NO_MOD, 0,
+							      24, 32, 'u'),
 		.ext_channels[1] = ST_ASM330LHHX_EVENT_CHANNEL(IIO_PRESSURE,
 							       flush),
 		.ext_channels[2] = IIO_CHAN_SOFT_TIMESTAMP(1),
@@ -196,10 +195,9 @@ static const struct st_asm330lhhx_ext_dev_settings
 			.mask = BIT(1),
 		},
 		.ext_available_scan_masks = { 0x1, 0x0 },
-		.ext_channels[0] = ST_ASM330LHHX_DATA_CHANNEL(
-				IIO_PRESSURE, 0x28,
-				0, IIO_NO_MOD, 0,
-				24, 32, 'u'),
+		.ext_channels[0] = ST_ASM330LHHX_DATA_CHANNEL(IIO_PRESSURE, 0x28,
+							      0, IIO_NO_MOD, 0,
+							      24, 32, 'u'),
 		.ext_channels[1] = ST_ASM330LHHX_EVENT_CHANNEL(IIO_PRESSURE,
 							       flush),
 		.ext_channels[2] = IIO_CHAN_SOFT_TIMESTAMP(1),
@@ -211,7 +209,7 @@ static const struct st_asm330lhhx_ext_dev_settings
 /**
  * Wait write trigger [SHUB]
  *
- * In write on external device register, each operation is triggered
+ * In write on external deivce register, each operation is triggered
  * by accel/gyro data ready, this means that wait time depends on ODR
  * plus i2c time
  * NOTE: Be sure to enable Acc or Gyro before this operation
@@ -281,7 +279,7 @@ out:
  * @return  0 if OK, < 0 if ERROR
  */
 static int st_asm330lhhx_shub_write_reg(struct st_asm330lhhx_hw *hw, u8 addr,
-		u8 *data, int len)
+				        u8 *data, int len)
 {
 	int err;
 
@@ -451,9 +449,8 @@ static int st_asm330lhhx_shub_write(struct st_asm330lhhx_sensor *sensor,
  * @param  val: Data buffer.
  * @return  0 if OK, < 0 if ERROR
  */
-static int st_asm330lhhx_shub_write_with_mask(
-		struct st_asm330lhhx_sensor *sensor,
-		u8 addr, u8 mask, u8 val)
+static int st_asm330lhhx_shub_write_with_mask(struct st_asm330lhhx_sensor *sensor,
+					      u8 addr, u8 mask, u8 val)
 {
 	int err;
 	u8 data;
@@ -476,9 +473,8 @@ static int st_asm330lhhx_shub_write_with_mask(
  * @param  enable: Enable/Disable sensor.
  * @return  0 if OK, < 0 if ERROR
  */
-static int st_asm330lhhx_shub_config_channels(
-		struct st_asm330lhhx_sensor *sensor,
-		bool enable)
+static int st_asm330lhhx_shub_config_channels(struct st_asm330lhhx_sensor *sensor,
+					      bool enable)
 {
 	struct st_asm330lhhx_ext_dev_info *ext_info;
 	struct st_asm330lhhx_hw *hw = sensor->hw;
@@ -814,8 +810,7 @@ static ssize_t st_asm330lhhx_sysfs_shub_scale_avail(struct device *dev,
 	return len;
 }
 
-static IIO_DEV_ATTR_SAMP_FREQ_AVAIL(
-		st_asm330lhhx_sysfs_shub_sampling_freq_avail);
+static IIO_DEV_ATTR_SAMP_FREQ_AVAIL(st_asm330lhhx_sysfs_shub_sampling_freq_avail);
 static IIO_DEVICE_ATTR(in_ext_scale_available, 0444,
 		       st_asm330lhhx_sysfs_shub_scale_avail, NULL, 0);
 static IIO_DEVICE_ATTR(hwfifo_watermark_max, 0444,
@@ -852,10 +847,9 @@ static const struct iio_info st_asm330lhhx_ext_info = {
  * @param  i2c_addr: external I2C address on master bus.
  * @return  struct iio_dev *, NULL if ERROR
  */
-static struct iio_dev *st_asm330lhhx_shub_alloc_iio_dev(
-		struct st_asm330lhhx_hw *hw,
-		const struct st_asm330lhhx_ext_dev_settings *ext_settings,
-		enum st_asm330lhhx_sensor_id id, u8 i2c_addr)
+static struct iio_dev *st_asm330lhhx_shub_alloc_iio_dev(struct st_asm330lhhx_hw *hw,
+			const struct st_asm330lhhx_ext_dev_settings *ext_settings,
+			enum st_asm330lhhx_sensor_id id, u8 i2c_addr)
 {
 	struct st_asm330lhhx_sensor *sensor;
 	struct iio_dev *iio_dev;
@@ -899,8 +893,7 @@ static struct iio_dev *st_asm330lhhx_shub_alloc_iio_dev(
 	return iio_dev;
 }
 
-static int st_asm330lhhx_shub_init_remote_sensor(
-		struct st_asm330lhhx_sensor *sensor)
+static int st_asm330lhhx_shub_init_remote_sensor(struct st_asm330lhhx_sensor *sensor)
 {
 	struct st_asm330lhhx_ext_dev_info *ext_info = &sensor->ext_dev_info;
 	int err = 0;
