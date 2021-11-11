@@ -85,6 +85,19 @@ enum qmi_ts_sensor {
 	QMI_TS_MMW2,
 	QMI_TS_MMW3,
 	QMI_TS_MMW_IFIC0,
+	QMI_TS_RET_PA_0_FR1,
+	QMI_TS_WTR_PA_0_FR1,
+	QMI_TS_WTR_PA_1_FR1,
+	QMI_TS_WTR_PA_2_FR1,
+	QMI_TS_WTR_PA_3_FR1,
+	QMI_TS_WTR_PA_4,
+	QMI_TS_WTR_PA_5,
+	QMI_TS_WTR_PA_6,
+	QMI_TS_WTR_PA_4_FR1,
+	QMI_TS_WTR_PA_5_FR1,
+	QMI_TS_WTR_PA_6_FR1,
+	QMI_TS_RET_PA_1,
+	QMI_TS_RET_PA_1_FR1,
 	QMI_TS_MAX_NR
 };
 
@@ -163,12 +176,25 @@ static char sensor_clients[QMI_TS_MAX_NR][QMI_CLIENT_NAME_LENGTH] = {
 	{"mmw2"},
 	{"mmw3"},
 	{"mmw_ific0"},
+	{"qfe_ret_pa0_fr1"},
+	{"qfe_wtr_pa0_fr1"},
+	{"qfe_wtr_pa1_fr1"},
+	{"qfe_wtr_pa2_fr1"},
+	{"qfe_wtr_pa3_fr1"},
+	{"qfe_wtr_pa4"},
+	{"qfe_wtr_pa5"},
+	{"qfe_wtr_pa6"},
+	{"qfe_wtr_pa4_fr1"},
+	{"qfe_wtr_pa5_fr1"},
+	{"qfe_wtr_pa6_fr1"},
+	{"qfe_ret_pa1"},
+	{"qfe_ret_pa1_fr1"},
 };
 
 static int32_t encode_qmi(int32_t val)
 {
 	uint32_t shift = 0, local_val = 0;
-	int32_t temp_val = 0;
+	unsigned long temp_val = 0;
 
 	if (val == INT_MAX || val == INT_MIN)
 		return 0;
@@ -178,8 +204,7 @@ static int32_t encode_qmi(int32_t val)
 		temp_val *= -1;
 		local_val |= 1 << QMI_FL_SIGN_BIT;
 	}
-	shift = find_last_bit((const unsigned long *)&temp_val,
-			sizeof(temp_val) * 8);
+	shift = find_last_bit(&temp_val, sizeof(temp_val) * 8);
 	local_val |= ((shift + 127) << QMI_MANTISSA_MSB);
 	temp_val &= ~(1 << shift);
 
@@ -323,6 +348,13 @@ static int qmi_ts_request(struct qmi_sensor *qmi_sens,
 			qmi_sens->low_thresh != INT_MIN;
 		req.temp_threshold_low =
 			encode_qmi(qmi_sens->low_thresh);
+
+		pr_debug("Sensor:%s set high_trip:%d, low_trip:%d, high_valid:%d, low_valid:%d\n",
+			qmi_sens->qmi_name,
+			qmi_sens->high_thresh,
+			qmi_sens->low_thresh,
+			req.temp_threshold_high_valid,
+			req.temp_threshold_low_valid);
 	}
 
 	mutex_lock(&ts->mutex);
