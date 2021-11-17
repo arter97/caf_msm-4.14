@@ -1519,6 +1519,7 @@ static int msm_release(struct inode *inode, struct file *filp)
 
         mutex_lock(&msm_release_lock);
 
+        file_priv = filp->private_data;
         if (!file_priv) {
                   ret = -EINVAL;
                   goto end;
@@ -1527,7 +1528,6 @@ static int msm_release(struct inode *inode, struct file *filp)
         minor = file_priv->minor;
         dev = minor->dev;
         priv = dev->dev_private;
-	file_priv = filp->private_data;
 
 
 	spin_lock_irqsave(&dev->event_lock, flags);
