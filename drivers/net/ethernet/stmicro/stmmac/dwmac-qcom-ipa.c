@@ -42,7 +42,10 @@
 #define NTN_IPA_DBG_MAX_MSG_LEN 3000
 #define IPA_SYSFS_DEV_ATTR_PERMS 0644
 static struct ethqos_prv_ipa_data eth_ipa_ctx;
-
+static struct class *emac_ipa_class;
+static dev_t emac_ipa_dev_num;
+static struct cdev *emac_ipa_cdev;
+static struct device *emac_ipa_dev;
 static void __ipa_eth_free_msg(void *buff, u32 len, u32 type) {}
 
 static inline void *ethqos_get_priv(struct qcom_ethqos *ethqos)
@@ -1635,6 +1638,14 @@ static int ethqos_ipa_cleanup_debugfs(struct qcom_ethqos *ethqos)
 		return -EINVAL;
 	}
 
+	if(emac_ipa_dev)
+	{
+		device_destroy(emac_ipa_class, emac_ipa_dev_num);
+		class_destroy(emac_ipa_class);
+		cdev_del(emac_ipa_cdev);
+		unregister_chrdev_region(emac_ipa_dev_num, 1);
+	}
+
 	sysfs_remove_file(&netdev->dev.kobj,
 			  &dev_attr_suspend_ipa_offload.attr);
 
@@ -1687,6 +1698,43 @@ static int ethqos_ipa_create_debugfs(struct qcom_ethqos *ethqos)
 		goto fail;
 	}
 
+	ret = alloc_chrdev_region(&emac_ipa_dev_num, 0, 1, "emac_ipa");
+	if (ret) {
+		ETHQOSERR("alloc_chrdev_region error for node %s\n",
+			  "emac_ipa");
+		goto alloc_emac_ipa_chrdev_region_fail;
+	}
+
+	emac_ipa_cdev = cdev_alloc();
+	if (!emac_ipa_cdev) {
+		ret = -ENOMEM;
+		ETHQOSERR("failed to alloc emac_ipa cdev\n");
+		goto fail_alloc_emac_ipa_cdev;
+	}
+
+	cdev_init(emac_ipa_cdev,NULL);
+
+	ret = cdev_add(emac_ipa_cdev,emac_ipa_dev_num,1);
+	if (ret < 0) {
+		ETHQOSERR("emac_ipa cdev_add err=%d\n", -ret);
+		goto emac_ipa_cdev_add_fail;
+	}
+
+	emac_ipa_class = class_create(THIS_MODULE,"emac_ipa");
+	if (!emac_ipa_class) {
+		ret = -ENODEV;
+		ETHQOSERR("failed to create emac_ipa class\n");
+		goto fail_create_emac_ipa_class;
+	}
+
+	emac_ipa_dev = device_create(emac_ipa_class, NULL,
+			   emac_ipa_dev_num, NULL, "emac_ipa");
+	if (!emac_ipa_dev) {
+		ret = -EINVAL;
+		ETHQOSERR("failed to create emac_ipa device\n");
+		goto fail_create_emac_ipa_device;
+	}
+
 	eth_ipa->debugfs_ipa_stats =
 		debugfs_create_file("ipa_stats", 0600,
 				    ethqos->debugfs_dir, ethqos,
@@ -1714,6 +1762,15 @@ static int ethqos_ipa_create_debugfs(struct qcom_ethqos *ethqos)
 fail:
 	ethqos_ipa_cleanup_debugfs(ethqos);
 	return -ENOMEM;
+fail_create_emac_ipa_device:
+	class_destroy(emac_ipa_class);
+fail_create_emac_ipa_class:
+	cdev_del(emac_ipa_cdev);
+emac_ipa_cdev_add_fail:
+fail_alloc_emac_ipa_cdev:
+	unregister_chrdev_region(emac_ipa_dev_num, 1);
+alloc_emac_ipa_chrdev_region_fail:
+	return ret;
 }
 
 static int ethqos_ipa_offload_connect(struct qcom_ethqos *ethqos)
