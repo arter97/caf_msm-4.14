@@ -6832,10 +6832,13 @@ out:
 
 static bool ufshcd_wb_sup(struct ufs_hba *hba)
 {
+	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
+
 	return ((hba->dev_info.d_ext_ufs_feature_sup &
 		   UFS_DEV_WRITE_BOOSTER_SUP) &&
 		  (hba->dev_info.b_wb_buffer_type
-		   || hba->dev_info.wb_config_lun));
+		   || hba->dev_info.wb_config_lun) &&
+			!host->disable_wb_support);
 }
 
 static int ufshcd_wb_ctrl(struct ufs_hba *hba, bool enable)
@@ -9284,7 +9287,8 @@ static int ufshcd_extcon_unregister(struct ufs_hba *hba)
 static void ufshcd_async_scan(void *data, async_cookie_t cookie)
 {
 	struct ufs_hba *hba = (struct ufs_hba *)data;
-
+	struct device *dev = hba->dev;
+	struct device_node *np = dev->of_node;
 	/*
 	 * Don't allow clock gating and hibern8 enter for faster device
 	 * detection.
@@ -9292,6 +9296,9 @@ static void ufshcd_async_scan(void *data, async_cookie_t cookie)
 	ufshcd_hold_all(hba);
 	ufshcd_probe_hba(hba);
 	ufshcd_release_all(hba);
+
+	if (!of_property_read_bool(np, "secondary-storage"))
+		hba->primary_boot_device_probed = true;
 
 	ufshcd_extcon_register(hba);
 }
@@ -10633,6 +10640,15 @@ static int ufshcd_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 
 	ufshcd_wb_buf_flush_disable(hba);
 	if (!ufshcd_is_ufs_dev_active(hba)) {
+		/*
+		 * QCS610 UFS 3.x uses PMIC Buck regulator which requires
+		 * additional delay to settle its voltage back to normal 2.5
+		 * volts from the power down, so below delay_ssu flag is
+		 * used to enable delay before sending start stop unit command.
+		 */
+		if (hba->delay_ssu && hba->dev_info.w_spec_version >= 0x300)
+			usleep_range(20, 25);
+
 		ret = ufshcd_set_dev_pwr_mode(hba, UFS_ACTIVE_PWR_MODE);
 		if (ret)
 			goto set_old_link_state;
@@ -10667,8 +10683,18 @@ skip_dev_ops:
 	goto out;
 
 set_old_dev_pwr_mode:
-	if (old_pwr_mode != hba->curr_dev_pwr_mode)
+	if (old_pwr_mode != hba->curr_dev_pwr_mode) {
+		/*
+		 * QCS610 UFS 3.x uses PMIC Buck regulator which requires
+		 * additional delay to settle its voltage back to normal 2.5
+		 * volts from the power down, so below delay_ssu flag is
+		 * used to enable delay before sending start stop unit command.
+		 */
+		if (hba->delay_ssu && hba->dev_info.w_spec_version >= 0x300)
+			usleep_range(20, 25);
+
 		ufshcd_set_dev_pwr_mode(hba, old_pwr_mode);
+	}
 set_old_link_state:
 	ufshcd_link_state_transition(hba, old_link_state, 0);
 	if (ufshcd_is_link_hibern8(hba) &&

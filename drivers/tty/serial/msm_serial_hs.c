@@ -1869,7 +1869,7 @@ static void msm_hs_sps_tx_callback(struct sps_event_notify *notify)
 		&addr, notify->data.transfer.iovec.size,
 		notify->data.transfer.iovec.flags);
 
-	del_timer_sync(&msm_uport->tx.tx_timeout_timer);
+	del_timer(&msm_uport->tx.tx_timeout_timer);
 	MSM_HS_DBG("%s(): Queue kthread work\n", __func__);
 	kthread_queue_work(&msm_uport->tx.kworker, &msm_uport->tx.kwork);
 }
@@ -2004,7 +2004,20 @@ static void msm_hs_sps_rx_callback(struct sps_event_notify *notify)
  */
 static unsigned int msm_hs_get_mctrl_locked(struct uart_port *uport)
 {
-	return TIOCM_DSR | TIOCM_CAR | TIOCM_CTS;
+	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
+	unsigned int mctrl = TIOCM_DSR | TIOCM_CAR;
+	unsigned int status;
+
+	if (msm_uport->pm_state != MSM_HS_PM_ACTIVE) {
+		MSM_HS_WARN("%s(): Clocks are off\n", __func__);
+		return (mctrl | TIOCM_CTS);
+	}
+
+	status = msm_hs_read(uport, UART_DM_ISR);
+	if (!(status & UARTDM_ISR_CURRENT_CTS_BMSK))
+		mctrl |= TIOCM_CTS;
+
+	return mctrl;
 }
 
 /*
@@ -2097,9 +2110,6 @@ static void msm_hs_config_port(struct uart_port *uport, int cfg_flags)
 /*  Handle CTS changes (Called from interrupt handler) */
 static void msm_hs_handle_delta_cts_locked(struct uart_port *uport)
 {
-	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
-
-	msm_hs_resource_vote(msm_uport);
 	/* clear interrupt */
 	msm_hs_write(uport, UART_DM_CR, RESET_CTS);
 	/* Calling CLOCK API. Hence mb() requires here. */
@@ -2108,7 +2118,6 @@ static void msm_hs_handle_delta_cts_locked(struct uart_port *uport)
 
 	/* clear the IOCTL TIOCMIWAIT if called */
 	wake_up_interruptible(&uport->state->port.delta_msr_wait);
-	msm_hs_resource_unvote(msm_uport);
 }
 
 static irqreturn_t msm_hs_isr(int irq, void *dev)
@@ -2868,6 +2877,9 @@ struct msm_serial_hs_platform_data
 		pdata->rx_to_inject = (u8)rx_to_inject;
 	}
 
+	pdata->rx_brk_detect = of_property_read_bool(node,
+					"qcom,rx-break-detect");
+
 	ret = of_property_read_u32(node, "qcom,bam-tx-ep-pipe-index",
 				&pdata->bam_tx_ep_pipe_index);
 	if (ret < 0) {
@@ -3561,16 +3573,19 @@ static int msm_hs_probe(struct platform_device *pdev)
 	mb();
 
 	/*
-	 * Set RX_BREAK_ZERO_CHAR_OFF and RX_ERROR_CHAR_OFF
-	 * so any rx_break and character having parity of framing
-	 * error don't enter inside UART RX FIFO.
+	 * Set RX_BREAK_ZERO_CHAR_OFF and RX_ERROR_CHAR_OFF so
+	 * any rx_break and character having parity of framing error
+	 * don't enter inside UART RX FIFO if "qcom,rx-break-detect"
+	 * flag is not set.
 	 */
-	data = msm_hs_read(uport, UART_DM_MR2);
-	data |= (UARTDM_MR2_RX_BREAK_ZERO_CHAR_OFF |
-			UARTDM_MR2_RX_ERROR_CHAR_OFF);
-	msm_hs_write(uport, UART_DM_MR2, data);
-	/* Ensure register IO completion */
-	mb();
+	if (!(pdata->rx_brk_detect)) {
+		data = msm_hs_read(uport, UART_DM_MR2);
+		data |= (UARTDM_MR2_RX_BREAK_ZERO_CHAR_OFF |
+				UARTDM_MR2_RX_ERROR_CHAR_OFF);
+		msm_hs_write(uport, UART_DM_MR2, data);
+		/* Ensure register IO completion */
+		mb();
+	}
 
 	ret = sysfs_create_file(&pdev->dev.kobj, &dev_attr_clock.attr);
 	if (unlikely(ret)) {
