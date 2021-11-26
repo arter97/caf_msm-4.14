@@ -2004,7 +2004,20 @@ static void msm_hs_sps_rx_callback(struct sps_event_notify *notify)
  */
 static unsigned int msm_hs_get_mctrl_locked(struct uart_port *uport)
 {
-	return TIOCM_DSR | TIOCM_CAR | TIOCM_CTS;
+	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
+	unsigned int mctrl = TIOCM_DSR | TIOCM_CAR;
+	unsigned int status;
+
+	if (msm_uport->pm_state != MSM_HS_PM_ACTIVE) {
+		MSM_HS_WARN("%s(): Clocks are off\n", __func__);
+		return (mctrl | TIOCM_CTS);
+	}
+
+	status = msm_hs_read(uport, UART_DM_ISR);
+	if (!(status & UARTDM_ISR_CURRENT_CTS_BMSK))
+		mctrl |= TIOCM_CTS;
+
+	return mctrl;
 }
 
 /*
@@ -2097,9 +2110,6 @@ static void msm_hs_config_port(struct uart_port *uport, int cfg_flags)
 /*  Handle CTS changes (Called from interrupt handler) */
 static void msm_hs_handle_delta_cts_locked(struct uart_port *uport)
 {
-	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
-
-	msm_hs_resource_vote(msm_uport);
 	/* clear interrupt */
 	msm_hs_write(uport, UART_DM_CR, RESET_CTS);
 	/* Calling CLOCK API. Hence mb() requires here. */
@@ -2108,7 +2118,6 @@ static void msm_hs_handle_delta_cts_locked(struct uart_port *uport)
 
 	/* clear the IOCTL TIOCMIWAIT if called */
 	wake_up_interruptible(&uport->state->port.delta_msr_wait);
-	msm_hs_resource_unvote(msm_uport);
 }
 
 static irqreturn_t msm_hs_isr(int irq, void *dev)
