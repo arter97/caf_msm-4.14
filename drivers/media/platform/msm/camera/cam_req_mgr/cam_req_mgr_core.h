@@ -1,4 +1,4 @@
-/* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -218,13 +218,14 @@ struct cam_req_mgr_req_tbl {
 /**
  * struct cam_req_mgr_slot
  * - Internal Book keeping
- * @idx          : slot index
- * @skip_idx     : if req id in this slot needs to be skipped/not applied
- * @status       : state machine for life cycle of a slot
+ * @idx                : slot index
+ * @skip_idx           : if req id in this slot needs to be skipped/not applied
+ * @status             : state machine for life cycle of a slot
  * - members updated due to external events
- * @recover      : if user enabled recovery for this request.
- * @req_id       : mask tracking which all devices have request ready
- * @sync_mode    : Sync mode in which req id in this slot has to applied
+ * @recover            : if user enabled recovery for this request.
+ * @req_id             : mask tracking which all devices have request ready
+ * @sync_mode          : Sync mode in which req id in this slot has to applied
+ * @adjust_timeout     : Adjusted watchdog timeout value associated with request
  */
 struct cam_req_mgr_slot {
 	int32_t               idx;
@@ -233,6 +234,7 @@ struct cam_req_mgr_slot {
 	int32_t               recover;
 	int64_t               req_id;
 	int32_t               sync_mode;
+	int32_t               adjust_timeout;
 };
 
 /**
