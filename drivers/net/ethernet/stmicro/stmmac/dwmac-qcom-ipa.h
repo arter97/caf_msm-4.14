@@ -664,6 +664,8 @@ struct ethqos_prv_ipa_data {
 	bool ipa_offload_susp;
 	/* State of IPA offload enablement from PHY link event*/
 	bool ipa_offload_link_down;
+	/* State of netdev interface reset*/
+	bool emac_dev_reset;
 
 	/* Dev state */
 	struct work_struct ntn_ipa_rdy_work;
