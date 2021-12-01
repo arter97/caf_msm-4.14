@@ -46,7 +46,7 @@ static int __init hash_setup(char *str)
 	struct ima_template_desc *template_desc = ima_template_desc_current();
 	int i;
 
-	if (hash_setup_done)
+	if (hash_setup_done || template_desc == NULL)
 		return 1;
 
 	if (strcmp(template_desc->name, IMA_TEMPLATE_IMA_NAME) == 0) {
@@ -254,6 +254,8 @@ static int process_measurement(struct file *file, char *buf, loff_t size,
 	}
 
 	template_desc = ima_template_desc_current();
+        if (template_desc == NULL)
+                goto out_locked;
 	if ((action & IMA_APPRAISE_SUBMASK) ||
 		    strcmp(template_desc->name, IMA_TEMPLATE_IMA_NAME) != 0)
 		/* read 'security.ima' */

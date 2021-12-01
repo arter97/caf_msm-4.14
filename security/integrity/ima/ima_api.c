@@ -43,6 +43,9 @@ int ima_alloc_init_template(struct ima_event_data *event_data,
 	struct ima_template_desc *template_desc = ima_template_desc_current();
 	int i, result = 0;
 
+        if (template_desc == NULL)
+                result -EINVAL;
+
 	*entry = kzalloc(sizeof(**entry) + template_desc->num_fields *
 			 sizeof(struct ima_field_data), GFP_NOFS);
 	if (!*entry)
@@ -141,7 +144,7 @@ void ima_add_violation(struct file *file, const unsigned char *filename,
 	atomic_long_inc(&ima_htable.violations);
 
 	result = ima_alloc_init_template(&event_data, &entry);
-	if (result < 0) {
+	if (result < 0 || entry == NULL) {
 		result = -ENOMEM;
 		goto err_out;
 	}
@@ -288,7 +291,7 @@ void ima_store_measurement(struct integrity_iint_cache *iint,
 		return;
 
 	result = ima_alloc_init_template(&event_data, &entry);
-	if (result < 0) {
+	if (result < 0 || entry == NULL) {
 		integrity_audit_msg(AUDIT_INTEGRITY_PCR, inode, filename,
 				    op, audit_cause, result, 0);
 		return;

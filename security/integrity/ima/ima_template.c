@@ -232,7 +232,8 @@ int __init ima_init_template(void)
 {
 	struct ima_template_desc *template = ima_template_desc_current();
 	int result;
-
+        if (template == NULL)
+                return -EINVAL;
 	result = template_desc_init_fields(template->fmt,
 					   &(template->fields),
 					   &(template->num_fields));

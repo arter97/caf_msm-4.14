@@ -907,6 +907,8 @@ ssize_t ima_parse_add_rule(char *rule)
 	int audit_info = 0;
 
 	p = strsep(&rule, "\n");
+        if (p == NULL)
+                return -EBADPARAM;
 	len = strlen(p) + 1;
 	p += strspn(p, " \t");
 
