@@ -1070,7 +1070,7 @@ static int ais_vfe_handle_bus_wr_irq(struct cam_hw_info *vfe_hw,
 	if (work_data->bus_wr_status[0] & 0x7800) {
 		CAM_ERR(CAM_ISP, "VFE%d: WR BUS error occurred status = 0x%x",
 			core_info->vfe_idx, work_data->bus_wr_status[0]);
-		work_data->path = (work_data->bus_wr_status[0] >> 11) & 0xF;
+		work_data->path = (work_data->bus_wr_status[0] >> 14) & 0xF;
 		rc = ais_vfe_handle_error(core_info, work_data);
 	}
 
