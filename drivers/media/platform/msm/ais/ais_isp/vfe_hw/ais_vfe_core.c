@@ -877,7 +877,7 @@ static int ais_vfe_handle_error(
 			continue;
 
 		p_rdi = &core_info->rdi_out[path];
-		CAM_ERR(CAM_ISP, "IFE%d p_rdi->state = %d", p_rdi->state);
+		CAM_ERR(CAM_ISP, "IFE%d p_rdi->state = %d",  core_info->vfe_idx,  p_rdi->state);
 
 		if (p_rdi->state == AIS_ISP_RESOURCE_STATE_STREAMING)
 		{
