@@ -19,6 +19,7 @@
 	qcom,va-without-decimation;
 	slew_rate_reg1 = <0xD8E000 0x0>;
 	slew_rate_val1 = <0x3 0x0>;
+	status = "disabled";
 	tx_macro: tx-macro@0a460000 {
 		compatible = "qcom,tx-macro";
 		reg = <0x0a460000 0x0>;
@@ -191,6 +192,7 @@
 	qcom,model = "trinket-idp-snd-card";
 	qcom,msm-mi2s-master = <1>, <1>, <1>, <1>, <1>;
 	qcom,ext-disp-audio-rx = <1>;
+	status = "disabled";
 	qcom,audio-routing =
 		"AMIC2", "MIC BIAS2",
 		"MIC BIAS2", "Analog Mic2",
