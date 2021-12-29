@@ -1,4 +1,4 @@
-/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018-2022, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -92,7 +92,6 @@ struct npu_network {
 	bool is_valid;
 	bool is_active;
 	bool fw_error;
-	bool is_async;
 	struct npu_client *client;
 	struct list_head cmd_list;
 };
