@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2021, The Linux foundation. All rights reserved.
+ * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1736,6 +1736,15 @@ static void stop_tx_sequencer(struct uart_port *uport)
 	if (port->uart_ssr.is_ssr_down) {
 		IPC_LOG_MSG(port->ipc_log_misc, "%s: SSR Down event set\n",
 			__func__);
+		if (port->tx_dma && !uart_console(uport)) {
+			geni_se_tx_dma_unprep(port->wrapper_dev,
+					port->tx_dma, port->xmit_size);
+			port->tx_dma = (dma_addr_t)NULL;
+			IPC_LOG_MSG(port->ipc_log_misc,
+				"%s:Remove vote when ssr while xfer\n",
+								__func__);
+			msm_geni_serial_power_off(uport);
+		}
 		return;
 	}
 
@@ -1928,6 +1937,11 @@ static int stop_rx_sequencer(struct uart_port *uport)
 	if (port->uart_ssr.is_ssr_down) {
 		IPC_LOG_MSG(port->ipc_log_misc, "%s: SSR Down event set\n",
 			__func__);
+		if (port->rx_dma) {
+			geni_se_iommu_free_buf(port->wrapper_dev,
+				&port->rx_dma, port->rx_buf, DMA_RX_BUF_SIZE);
+			port->rx_dma = (dma_addr_t)NULL;
+		}
 		complete(&port->xfer);
 		return 0;
 	}
@@ -3818,6 +3832,15 @@ static int msm_geni_serial_get_ver_info(struct uart_port *uport)
 			msm_port->ver_info.hw_minor_ver,
 			msm_port->ver_info.hw_step_ver);
 
+	/* GSI mode changes */
+	msm_port->gsi_mode = geni_read_reg(uport->membase,
+				GENI_IF_FIFO_DISABLE_RO) & FIFO_IF_DISABLE;
+	dev_info(uport->dev, "gsi_mode:%d\n", msm_port->gsi_mode);
+	if (msm_port->gsi_mode) {
+		msm_port->gsi = devm_kzalloc(uport->dev,
+					sizeof(*msm_port->gsi), GFP_KERNEL);
+	}
+
 	msm_geni_serial_enable_interrupts(uport);
 exit_ver_info:
 	se_geni_clks_off(&msm_port->serial_rsc);
@@ -4078,14 +4101,6 @@ static int msm_geni_serial_probe(struct platform_device *pdev)
 
 	dev_info(&pdev->dev, "Serial port%d added.FifoSize %d is_console%d\n",
 				line, uport->fifosize, is_console);
-
-	dev_port->gsi_mode = geni_read_reg(uport->membase,
-				GENI_IF_FIFO_DISABLE_RO) & FIFO_IF_DISABLE;
-	dev_err(uport->dev, "gsi_mode:%d\n", dev_port->gsi_mode);
-	if (dev_port->gsi_mode) {
-		dev_port->gsi = devm_kzalloc(uport->dev,
-					sizeof(*dev_port->gsi), GFP_KERNEL);
-	}
 
 	/*
 	 * SSR functionalities are required for SSC QUP in
