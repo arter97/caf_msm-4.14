@@ -5556,7 +5556,7 @@ static ssize_t smi130_acc_mode_store(struct device *dev,
 		return count;
 
 	if (smi130_acc_set_mode(smi130_acc->smi130_acc_client,
-		(unsigned char) data, SMI_ACC_ENABLED_BSX) < 0)
+		(unsigned char) data, SMI_ACC_ENABLED_ALL) < 0)
 			return -EINVAL;
 
 	return count;
