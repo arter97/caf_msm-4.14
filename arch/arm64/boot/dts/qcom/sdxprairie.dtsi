@@ -474,6 +474,7 @@
 		qcom,smem-id = <421>;
 		qcom,sysmon-id = <0>;
 		qcom,ssctl-instance-id = <0x22>;
+		qcom,minidump-id = <3>;
 
 		interrupts-extended = <&intc 0 250 1>,
 				<&modem_smp2p_in 0 0>,
