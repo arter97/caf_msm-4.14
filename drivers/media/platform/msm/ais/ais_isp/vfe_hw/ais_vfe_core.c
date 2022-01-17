@@ -57,6 +57,9 @@
 #define AIS_VFE_REGUP_RDI_ALL 0x1E
 
 /*VFE BUS DEFINITIONS*/
+#define AIS_VFE_BUS_STATUS0_ERROR_MASK AIS_VFE_BUS_STATUS0_VIOLATION
+#define AIS_VFE_BUS_STATUS0_VIOLATION  (1 << 14)
+
 #define MAX_NUM_BUF_HW_FIFOQ 4
 
 #define AIS_VFE_BUS_SET_DEBUG_REG                0x82
@@ -143,7 +146,7 @@ static int ais_vfe_bus_hw_deinit(struct ais_vfe_hw_core_info *core_info)
 	/*set IRQ mask for BUS WR*/
 	core_info->irq_mask0 &= ~AIS_VFE_STATUS0_BUS_WR_IRQ;
 
-	cam_io_w_mb(0x7800,
+	cam_io_w_mb(AIS_VFE_BUS_STATUS0_ERROR_MASK,
 		core_info->mem_base + bus_hw_irq_regs[0].mask_reg_offset);
 	cam_io_w_mb(0x0,
 		core_info->mem_base + bus_hw_irq_regs[1].mask_reg_offset);
@@ -1130,10 +1133,10 @@ static int ais_vfe_handle_bus_wr_irq(struct cam_hw_info *vfe_hw,
 	if (work_data->bus_wr_status[1])
 		ais_vfe_bus_handle_frame_done(core_info, work_data);
 
-	if (work_data->bus_wr_status[0] & 0x7800) {
-		CAM_ERR(CAM_ISP, "VFE%d: WR BUS error occurred status = 0x%x",
+	if (work_data->bus_wr_status[0] & AIS_VFE_BUS_STATUS0_VIOLATION) {
+		CAM_ERR(CAM_ISP, "VFE%d: WR BUS violation status = 0x%x",
 			core_info->vfe_idx, work_data->bus_wr_status[0]);
-		work_data->path = (work_data->bus_wr_status[0] >> 14) & 0xF;
+		work_data->path = 0xF;
 		rc = ais_vfe_handle_error(core_info, work_data);
 	}
 
