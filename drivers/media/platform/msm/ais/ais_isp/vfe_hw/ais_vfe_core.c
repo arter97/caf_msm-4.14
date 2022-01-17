@@ -1,4 +1,5 @@
 /* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -48,6 +49,7 @@
 #define AIS_VFE_STATUS0_RDI_OVERFLOW_IRQ  \
 	(0xF << AIS_VFE_STATUS1_RDI_OVERFLOW_IRQ_SHFT)
 #define AIS_VFE_STATUS0_RESET_ACK_IRQ  (1 << 31)
+#define AIS_VFE_GLOBAL_RESET_CMD_RDI_0_RESET_SHFT (10)
 
 #define AIS_VFE_REGUP_RDI_SHIFT 1
 #define AIS_VFE_REGUP_RDI_ALL 0x1E
@@ -239,6 +241,49 @@ static int ais_vfe_reset(void *hw_priv,
 
 	CAM_DBG(CAM_ISP, "Exit");
 	return rc;
+}
+
+static void ais_vfe_reset_rdi(void *hw_priv,
+	enum ais_ife_output_path_id path)
+{
+	struct cam_hw_info *vfe_hw  = hw_priv;
+	struct ais_vfe_top_ver2_hw_info *top_hw_info = NULL;
+	struct ais_vfe_hw_core_info *core_info = NULL;
+	uint32_t  reset_reg_val = 0;
+	int rc = 0;
+
+	core_info = (struct ais_vfe_hw_core_info *)vfe_hw->core_info;
+	top_hw_info = core_info->vfe_hw_info->top_hw_info;
+
+	cam_io_w_mb(AIS_VFE_STATUS0_RESET_ACK_IRQ,
+		core_info->mem_base + AIS_VFE_IRQ_MASK0);
+
+	reinit_completion(&vfe_hw->hw_complete);
+
+	reset_reg_val = 1 << (AIS_VFE_GLOBAL_RESET_CMD_RDI_0_RESET_SHFT + path);
+
+	/* Reset HW */
+	cam_io_w_mb(reset_reg_val,
+		core_info->mem_base +
+		top_hw_info->common_reg->global_reset_cmd);
+
+	CAM_DBG(CAM_ISP, "waiting for vfe reset complete");
+
+	/* Wait for Completion or Timeout of 500ms */
+	rc = wait_for_completion_timeout(&vfe_hw->hw_complete,
+					msecs_to_jiffies(500));
+
+	CAM_INFO(CAM_ISP, "reset IFE%d RDI%d complete done (%d)",
+		core_info->vfe_idx, path, rc);
+
+	if (rc)
+		rc = 0;
+	else
+		CAM_ERR(CAM_ISP, "Error! Reset Timeout");
+
+	core_info->irq_mask0 = 0x0;
+	cam_io_w_mb(0x0, core_info->mem_base + AIS_VFE_IRQ_MASK0);
+
 }
 
 int ais_vfe_init_hw(void *hw_priv, void *init_hw_args, uint32_t arg_size)
@@ -621,8 +666,6 @@ int ais_vfe_stop(void *hw_priv, void *stop_args, uint32_t arg_size)
 		goto EXIT;
 	}
 
-	rdi_path->state = AIS_ISP_RESOURCE_STATE_INIT_HW;
-
 	core_info->bus_wr_mask1 &= ~(1 << stop_cmd->path);
 	cam_io_w_mb(core_info->bus_wr_mask1,
 		core_info->mem_base + bus_hw_irq_regs[1].mask_reg_offset);
@@ -646,7 +689,19 @@ int ais_vfe_stop(void *hw_priv, void *stop_args, uint32_t arg_size)
 	else
 		CAM_WARN(CAM_ISP, "Reset Bus WR timeout");
 
+	/*
+	 * For now just when ERROR state do reset_rdi to
+	 * clear IFE overflow error.
+	 * TBD: If INIT/AVAILABLE state do reset_rdi,
+	 * in multi-stream start/stop test lead frame
+	 * freeze, need to check further why freeze.
+	 */
+	if (rdi_path->state == AIS_ISP_RESOURCE_STATE_ERROR)
+		ais_vfe_reset_rdi(vfe_hw, stop_cmd->path);
+
 	ais_clear_rdi_path(rdi_path);
+
+	rdi_path->state = AIS_ISP_RESOURCE_STATE_INIT_HW;
 
 EXIT:
 	mutex_unlock(&vfe_hw->hw_mutex);
