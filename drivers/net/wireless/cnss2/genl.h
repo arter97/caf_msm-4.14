@@ -1,4 +1,5 @@
-/* Copyright (c) 2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -10,34 +11,27 @@
  * GNU General Public License for more details.
  */
 
+
+
 #ifndef __CNSS_GENL_H__
 #define __CNSS_GENL_H__
 
+#include <net/netlink.h>
+#include <net/genetlink.h>
+
+#define CNSS_GENL_STR_LEN_MAX 32
 enum cnss_genl_msg_type {
 	CNSS_GENL_MSG_TYPE_UNSPEC,
 	CNSS_GENL_MSG_TYPE_QDSS,
+	CNSS_GENL_MSG_TYPE_DAEMON_SUPPORT,
+	CNSS_GENL_MSG_TYPE_COLD_BOOT_SUPPORT,
+	CNSS_GENL_MSG_TYPE_CALDATA_SUPPORT
 };
 
-#ifdef CONFIG_CNSS2_DEBUG
 int cnss_genl_init(void);
 void cnss_genl_exit(void);
 int cnss_genl_send_msg(void *buff, u8 type,
 		       char *file_name, u32 total_size);
-#else
-static inline int cnss_genl_init(void)
-{
-	return 0;
-}
-
-static inline void cnss_genl_exit(void)
-{
-}
-
-static inline int cnss_genl_send_msg(void *buff, u8 type,
-				     char *file_name, u32 total_size)
-{
-	return 0;
-}
-#endif
+int cnss_genl_process_msg(struct sk_buff *skb, struct genl_info *info);
 
 #endif

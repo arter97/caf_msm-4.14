@@ -1,4 +1,5 @@
-/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -12,11 +13,46 @@
 
 #ifndef _CNSS_QMI_H
 #define _CNSS_QMI_H
+#define CONFIG_CNSS2_QMI 1
+#include "wlan_firmware_service_v01.h"
 
-#include <linux/soc/qcom/qmi.h>
+#define WLFW_SERVICE_INS_ID_V01_QCA8074		2
+#define WLFW_SERVICE_INS_ID_V01_QCN9100		0x40
+#define BDF_MAX_SIZE (256 * 1024)
+#define BDF_TYPE_GOLDEN 0
+#define BDF_TYPE_CALDATA 2
+#define BDF_TYPE_EEPROM 3
+#define CALDATA_OFFSET(addr) (addr + (128 * 1024))
+#define Q6_QDSS_ETR_SIZE_QCN9000 0x100000
+#define Q6_M3_DUMP_SIZE_QCN9000 0x100000
+#define QMI_HISTORY_SIZE 128
+
+/* userpd_id for QCN9100 in multi pd arch */
+#define QCN9100_0	1
+#define QCN9100_1	2
+
+/* node_id for QCN9000 */
+#define QCN9000_0	0x20
+#define QCN9000_1	0x21
+
+/*NODE_ID_BASE is derived by qrtr_node_id in DTS + FW base node id 7 */
+#define NODE_ID_BASE 0x27
+#define FW_ID_BASE 7
+
+struct qmi_history {
+	u16  msg_id;
+	s8  error_msg;
+	s8  resp_err_msg;
+	u8  instance_id;
+	u8  reserved[3];
+	u64 timestamp;
+};
+
+extern struct qmi_history qmi_log[];
+extern int qmi_history_index;
+
 
 struct cnss_plat_data;
-
 struct cnss_qmi_event_server_arrive_data {
 	unsigned int node;
 	unsigned int port;
@@ -37,9 +73,18 @@ struct cnss_qmi_event_qdss_trace_save_data {
 	char file_name[QDSS_TRACE_FILE_NAME_MAX + 1];
 };
 
+struct cnss_qmi_event_m3_dump_upload_req_data {
+	u32 pdev_id;
+	u64 addr;
+	u64 size;
+};
+
 #ifdef CONFIG_CNSS2_QMI
 #include "wlan_firmware_service_v01.h"
+#include "coexistence_service_v01.h"
+#include "ip_multimedia_subsystem_private_service_v01.h"
 
+void cnss_dump_qmi_history(void);
 int cnss_qmi_init(struct cnss_plat_data *plat_priv);
 void cnss_qmi_deinit(struct cnss_plat_data *plat_priv);
 unsigned int cnss_get_qmi_timeout(struct cnss_plat_data *plat_priv);
@@ -63,7 +108,19 @@ int cnss_wlfw_athdiag_write_send_sync(struct cnss_plat_data *plat_priv,
 				      u32 data_len, u8 *data);
 int cnss_wlfw_ini_send_sync(struct cnss_plat_data *plat_priv,
 			    u8 fw_log_mode);
+int cnss_wlfw_antenna_switch_send_sync(struct cnss_plat_data *plat_priv);
+int cnss_wlfw_antenna_grant_send_sync(struct cnss_plat_data *plat_priv);
+int cnss_wlfw_dynamic_feature_mask_send_sync(struct cnss_plat_data *plat_priv);
+int cnss_register_coex_service(struct cnss_plat_data *plat_priv);
+void cnss_unregister_coex_service(struct cnss_plat_data *plat_priv);
+int coex_antenna_switch_to_wlan_send_sync_msg(struct cnss_plat_data *plat_priv);
+int coex_antenna_switch_to_mdm_send_sync_msg(struct cnss_plat_data *plat_priv);
 int cnss_wlfw_qdss_trace_mem_info_send_sync(struct cnss_plat_data *plat_priv);
+int cnss_register_ims_service(struct cnss_plat_data *plat_priv);
+void cnss_unregister_ims_service(struct cnss_plat_data *plat_priv);
+int cnss_wlfw_m3_dump_upload_done_send_sync(struct cnss_plat_data *plat_priv,
+					    u32 pdev_id, int status);
+int cnss_wlfw_device_info_send_sync(struct cnss_plat_data *plat_priv);
 #else
 #define QMI_WLFW_TIMEOUT_MS		10000
 
@@ -154,7 +211,65 @@ int cnss_wlfw_ini_send_sync(struct cnss_plat_data *plat_priv,
 }
 
 static inline
+int cnss_wlfw_antenna_switch_send_sync(struct cnss_plat_data *plat_priv)
+{
+	return 0;
+}
+
+static inline
+int cnss_wlfw_antenna_grant_send_sync(struct cnss_plat_data *plat_priv)
+{
+	return 0;
+}
+
+static inline
+int cnss_wlfw_dynamic_feature_mask_send_sync(struct cnss_plat_data *plat_priv)
+{
+	return 0;
+}
+
+static inline
+int cnss_register_coex_service(struct cnss_plat_data *plat_priv)
+{
+	return 0;
+}
+
+static inline
+void cnss_unregister_coex_service(struct cnss_plat_data *plat_priv) {}
+
+static inline
+int coex_antenna_switch_to_wlan_send_sync_msg(struct cnss_plat_data *plat_priv)
+{
+	return 0;
+}
+
+static inline
+int coex_antenna_switch_to_mdm_send_sync_msg(struct cnss_plat_data *plat_priv)
+
+static inline
 int cnss_wlfw_qdss_trace_mem_info_send_sync(struct cnss_plat_data *plat_priv)
+{
+	return 0;
+}
+
+static inline
+int cnss_register_ims_service(struct cnss_plat_data *plat_priv)
+{
+	return 0;
+}
+
+static inline
+void cnss_unregister_ims_service(struct cnss_plat_data *plat_priv) {}
+
+static inline
+int cnss_wlfw_m3_dump_upload_done_send_sync(struct cnss_plat_data *plat_priv,
+					    u32 pdev_id, int status)
+{
+	return 0;
+}
+
+static inline
+int cnss_wlfw_device_info_send_sync(struct cnss_plat_data *plat_priv)
 {
 	return 0;
 }

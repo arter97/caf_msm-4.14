@@ -1,4 +1,5 @@
-/* Copyright (c) 2017, 2020 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017, 2019-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -12,25 +13,13 @@
 
 #define pr_fmt(fmt) "cnss_utils: " fmt
 
-#include <linux/debugfs.h>
-#include <linux/etherdevice.h>
-#include <linux/bitops.h>
-#include <linux/io.h>
-#include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/kernel.h>
 #include <linux/slab.h>
+#include <linux/etherdevice.h>
+#include <linux/debugfs.h>
 #include <net/cnss_utils.h>
 
-#ifdef CONFIG_CNSS_TIMESYNC
-#define TCSR_WLAN_TIMESTAMP_SYNC 0x0195600C
-#define LPASS_SENSOR_IRQ_STC_MSB_OFFSET 4
-#define LPASS_SENSOR_IRQ_STC_LSB_OFFSET 8
-#define LPASS_SENSOR_IRQ_STC_MUX 0xC093000
-#define LPASS_PMU_INT_POS_EDGE_EN0 0xC06005C
-#define LPASS_PMU_INT_NEG_EDGE_EN0 0xC060070
-#define LPASS_PMU_INT_EN0 0xC060084
-#define LPASS_PMU_INT_CLR 0xC060034
-#endif
 #define CNSS_MAX_CH_NUM 45
 struct cnss_unsafe_channel_list {
 	u16 unsafe_ch_count;
@@ -48,10 +37,6 @@ struct cnss_wlan_mac_addr {
 	u8 mac_addr[MAX_NO_OF_MAC_ADDR][ETH_ALEN];
 	u32 no_of_mac_addr_set;
 };
-
-#ifdef CONFIG_CNSS_TIMESYNC
-static struct avtimer_cnss_fptr_t avtimer_func;
-#endif
 
 enum mac_type {
 	CNSS_MAC_PROVISIONED,
@@ -72,54 +57,6 @@ static struct cnss_utils_priv {
 	struct dentry *root_dentry;
 } *cnss_utils_priv;
 
-#ifdef CONFIG_CNSS_TIMESYNC
-/**
- * cnss_utils_set_avtimer_fptr() - Set avtimer function pointer
- * @avtimer: struct of type avtimer_cnss_fptr_t to hold function pointer.
- *
- * Initialize the function pointers sent by the avtimer driver
- *
- */
-void cnss_utils_set_avtimer_fptr(struct avtimer_cnss_fptr_t avtimer)
-{
-	avtimer_func.fptr_avtimer_open   = avtimer.fptr_avtimer_open;
-	avtimer_func.fptr_avtimer_enable = avtimer.fptr_avtimer_enable;
-	avtimer_func.fptr_avtimer_get_time = avtimer.fptr_avtimer_get_time;
-}
-EXPORT_SYMBOL(cnss_utils_set_avtimer_fptr);
-
-static void cnss_utils_start_avtimer(void)
-{
-	if (avtimer_func.fptr_avtimer_open &&
-	    avtimer_func.fptr_avtimer_enable) {
-		avtimer_func.fptr_avtimer_open();
-		avtimer_func.fptr_avtimer_enable(1);
-	} else {
-		pr_err("AV Timer is not supported\n");
-	}
-}
-
-static void cnss_utils_stop_avtimer(void)
-{
-	if (avtimer_func.fptr_avtimer_enable)
-		avtimer_func.fptr_avtimer_enable(0);
-	else
-		pr_err("AV Timer is not supported\n");
-}
-#else
-static void cnss_utils_start_avtimer(void)
-{
-	pr_err("AV Timer is not supported\n");
-}
-EXPORT_SYMBOL(cnss_utils_start_avtimer);
-
-static void cnss_utils_stop_avtimer(void)
-{
-	pr_err("AV Timer is not supported\n");
-}
-EXPORT_SYMBOL(cnss_utils_stop_avtimer);
-#endif
-
 int cnss_utils_set_wlan_unsafe_channel(struct device *dev,
 				       u16 *unsafe_ch_list, u16 ch_count)
 {
@@ -129,7 +66,7 @@ int cnss_utils_set_wlan_unsafe_channel(struct device *dev,
 		return -EINVAL;
 
 	mutex_lock(&priv->unsafe_channel_list_lock);
-	if ((!unsafe_ch_list) || (ch_count > CNSS_MAX_CH_NUM)) {
+	if (!unsafe_ch_list || ch_count > CNSS_MAX_CH_NUM) {
 		mutex_unlock(&priv->unsafe_channel_list_lock);
 		return -EINVAL;
 	}
@@ -193,11 +130,10 @@ int cnss_utils_wlan_set_dfs_nol(struct device *dev,
 	if (!info || !info_len)
 		return -EINVAL;
 
-	temp = kmalloc(info_len, GFP_ATOMIC);
+	temp = kmemdup(info, info_len, GFP_ATOMIC);
 	if (!temp)
 		return -ENOMEM;
 
-	memcpy(temp, info, info_len);
 	spin_lock_bh(&priv->dfs_nol_info_lock);
 	dfs_info = &priv->dfs_nol_info;
 	old_nol_info = dfs_info->dfs_nol_info;
@@ -316,8 +252,8 @@ int cnss_utils_set_wlan_mac_address(const u8 *mac_list, const uint32_t len)
 }
 EXPORT_SYMBOL(cnss_utils_set_wlan_mac_address);
 
-int cnss_utils_set_wlan_derived_mac_address(
-				const u8 *mac_list, const uint32_t len)
+int cnss_utils_set_wlan_derived_mac_address(const u8 *mac_list,
+					    const uint32_t len)
 {
 	return set_wlan_mac_address(mac_list, len, CNSS_MAC_DERIVED);
 }
@@ -355,8 +291,8 @@ u8 *cnss_utils_get_wlan_mac_address(struct device *dev, uint32_t *num)
 }
 EXPORT_SYMBOL(cnss_utils_get_wlan_mac_address);
 
-u8 *cnss_utils_get_wlan_derived_mac_address(
-			struct device *dev, uint32_t *num)
+u8 *cnss_utils_get_wlan_derived_mac_address(struct device *dev,
+					    uint32_t *num)
 {
 	return get_wlan_mac_address(dev, num, CNSS_MAC_DERIVED);
 }
@@ -385,95 +321,6 @@ enum cnss_utils_cc_src cnss_utils_get_cc_source(struct device *dev)
 }
 EXPORT_SYMBOL(cnss_utils_get_cc_source);
 
-#ifdef CONFIG_CNSS_TIMESYNC
-int cnss_get_audio_wlan_timestamp(struct device *dev,
-				  enum wlan_time_sync_trigger_type type,
-				  u64 *lpass_ts)
-{
-	void __iomem *tcsr_wlan_sync;
-	void  __iomem *lpass_ts_mux;
-	void  __iomem *lpass_pmu_int_edge_en;
-	void  __iomem *lpass_pmu_int_neg_edge_en;
-	void  __iomem *lpass_pmu_int_en;
-	void  __iomem *lpass_pmu_int_clr;
-	unsigned long int value;
-
-	tcsr_wlan_sync = devm_ioremap_nocache(dev, TCSR_WLAN_TIMESTAMP_SYNC, 4);
-	if (IS_ERR(tcsr_wlan_sync)) {
-		pr_err("failed to ioremap tcsr_wlan_sync\n");
-		return -ENOMEM;
-	}
-
-	lpass_ts_mux = devm_ioremap_nocache(dev, LPASS_SENSOR_IRQ_STC_MUX, 12);
-	if (IS_ERR(lpass_ts_mux)) {
-		pr_err("failed to ioremap lpass_ts_mux\n");
-		return -ENOMEM;
-	}
-
-	lpass_pmu_int_edge_en =
-		devm_ioremap_nocache(dev, LPASS_PMU_INT_POS_EDGE_EN0, 4);
-	if (IS_ERR(lpass_pmu_int_edge_en)) {
-		pr_err("failed to ioremap lpass_pmu_int_edge_en\n");
-		return -ENOMEM;
-	}
-
-	lpass_pmu_int_neg_edge_en =
-		devm_ioremap_nocache(dev, LPASS_PMU_INT_NEG_EDGE_EN0, 4);
-	if (IS_ERR(lpass_pmu_int_neg_edge_en)) {
-		pr_err("failed to ioremap lpass_pmu_int_neg_edge_en\n");
-		return -ENOMEM;
-	}
-
-	lpass_pmu_int_en = devm_ioremap_nocache(dev, LPASS_PMU_INT_EN0, 4);
-	if (IS_ERR(lpass_pmu_int_en)) {
-		pr_err("failed to ioremap lpass_pmu_int_en\n");
-		return -ENOMEM;
-	}
-
-	lpass_pmu_int_clr = devm_ioremap_nocache(dev, LPASS_PMU_INT_CLR, 4);
-	if (IS_ERR(lpass_pmu_int_clr)) {
-		pr_err("failed to ioremap lpass_pmu_int_clr\n");
-		return -ENOMEM;
-	}
-
-	cnss_utils_start_avtimer();
-	/* Enable PMU int for audio strobe, int #23,  is enabled */
-	value = ioread32(lpass_pmu_int_en);
-	iowrite32(value | BIT(23), lpass_pmu_int_en);
-
-	if (type == CNSS_POSITIVE_EDGE_TRIGGER) {
-		/* Enable positive edge */
-		value = ioread32(lpass_pmu_int_edge_en);
-		iowrite32(value | BIT(23), lpass_pmu_int_edge_en);
-	}
-
-	if (type == CNSS_NEGATIVE_EDGE_TRIGGER) {
-		/* Enable neg edge */
-		value = ioread32(lpass_pmu_int_neg_edge_en);
-		iowrite32(value | BIT(23), lpass_pmu_int_neg_edge_en);
-	}
-
-	/* Choose register based trigger */
-	value = ioread32(tcsr_wlan_sync);
-	iowrite32(value | BIT(0), tcsr_wlan_sync);
-
-	value = ioread32(tcsr_wlan_sync);
-	iowrite32(value ^ BIT(1), tcsr_wlan_sync);
-
-	/* read LPASS registers for Qtime */
-	value = ioread32(lpass_ts_mux + LPASS_SENSOR_IRQ_STC_MSB_OFFSET);
-	*lpass_ts = ((uint64_t)value << 32) |
-		ioread32(lpass_ts_mux + LPASS_SENSOR_IRQ_STC_LSB_OFFSET);
-	value = ioread32(lpass_pmu_int_clr);
-	iowrite32(value | BIT(23), lpass_pmu_int_clr);
-
-	cnss_utils_stop_avtimer();
-
-	return 0;
-}
-EXPORT_SYMBOL(cnss_get_audio_wlan_timestamp);
-#endif
-
 static ssize_t cnss_utils_mac_write(struct file *fp,
 				    const char __user *user_buf,
 				    size_t count, loff_t *off)
@@ -484,7 +331,7 @@ static ssize_t cnss_utils_mac_write(struct file *fp,
 	char *input, *mac_type, *mac_address;
 	u8 *dest_mac;
 	u8 val;
-	const char *delim = " \n";
+	const char *delim = "\n";
 	size_t len = 0;
 	char temp[3] = "";
 
@@ -504,7 +351,7 @@ static ssize_t cnss_utils_mac_write(struct file *fp,
 	mac_address = strsep(&input, delim);
 	if (!mac_address)
 		return -EINVAL;
-	if (strncmp("0x", mac_address, MAC_PREFIX_LEN)) {
+	if (strcmp("0x", mac_address)) {
 		pr_err("Invalid MAC prefix\n");
 		return -EINVAL;
 	}
