@@ -1,4 +1,4 @@
-/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018-2020,2022 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -9,6 +9,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  */
+
 #ifndef _MHI_H_
 #define _MHI_H_
 
@@ -35,6 +36,7 @@ struct mhi_sfr_info;
  * @MHI_CB_EE_MISSION_MODE: MHI device entered Mission Mode ee
  * @MHI_CB_SYS_ERROR: MHI device enter error state (may recover)
  * @MHI_CB_FATAL_ERROR: MHI device entered fatal error
+ * @MHI_CB_BOOTUP_TIMEOUT: MHI device did not get to a bootup state in time
  */
 enum MHI_CB {
 	MHI_CB_IDLE,
@@ -46,6 +48,8 @@ enum MHI_CB {
 	MHI_CB_EE_MISSION_MODE,
 	MHI_CB_SYS_ERROR,
 	MHI_CB_FATAL_ERROR,
+	MHI_CB_FW_FALLBACK_IMG,
+	MHI_CB_BOOTUP_TIMEOUT,
 };
 
 /**
@@ -124,6 +128,9 @@ enum mhi_dev_state {
 	MHI_STATE_MAX,
 };
 
+#define MHI_VOTE_BUS BIT(0) /* do not disable the bus */
+#define MHI_VOTE_DEVICE BIT(1) /* prevent mhi device from entering lpm */
+
 /**
  * struct mhi_link_info - bw requirement
  * target_link_speed - as defined by TLS bits in LinkControl reg
@@ -135,9 +142,6 @@ struct mhi_link_info {
 	unsigned int target_link_width;
 	int sequence_num;
 };
-
-#define MHI_VOTE_BUS BIT(0) /* do not disable the bus */
-#define MHI_VOTE_DEVICE BIT(1) /* prevent mhi device from entering lpm */
 
 /**
  * struct image_info - firmware and rddm table table
@@ -229,6 +233,7 @@ struct reg_write_info {
  * @rddm_size: RAM dump size that host should allocate for debugging purpose
  * @sbl_size: SBL image size
  * @seg_len: BHIe vector size
+ * @img_pre_alloc: allocate rddm and fbc image buffers one time
  * @fbc_image: Points to firmware image buffer
  * @rddm_image: Points to RAM dump buffer
  * @max_chan: Maximum number of channels controller support
@@ -267,6 +272,7 @@ struct mhi_controller {
 
 	/* mmio base */
 	phys_addr_t base_addr;
+	unsigned int len;
 	void __iomem *regs;
 	void __iomem *bhi;
 	void __iomem *bhie;
@@ -290,15 +296,19 @@ struct mhi_controller {
 
 	/* fw images */
 	const char *fw_image;
+	const char *fw_image_fallback;
 	const char *edl_image;
 
 	/* mhi host manages downloading entire fbc images */
 	bool fbc_download;
+	bool rddm_supported;
 	size_t rddm_size;
 	size_t sbl_size;
 	size_t seg_len;
 	u32 session_id;
 	u32 sequence_id;
+
+	bool img_pre_alloc;
 	struct image_info *fbc_image;
 	struct image_info *rddm_image;
 
@@ -339,6 +349,7 @@ struct mhi_controller {
 	enum mhi_dev_state dev_state;
 	enum mhi_dev_state saved_dev_state;
 	bool wake_set;
+	bool ignore_override;
 	atomic_t dev_wake;
 	atomic_t alloc_size;
 	atomic_t pending_pkts;
@@ -355,18 +366,19 @@ struct mhi_controller {
 	/* worker for different state transitions */
 	struct work_struct st_worker;
 	struct work_struct special_work;
-	struct workqueue_struct *special_wq;
+	struct workqueue_struct *wq;
 
 	wait_queue_head_t state_event;
 
 	/* shadow functions */
-	void (*status_cb)(struct mhi_controller *, void *, enum MHI_CB);
-	int (*link_status)(struct mhi_controller *, void *);
-	void (*wake_get)(struct mhi_controller *, bool);
-	void (*wake_put)(struct mhi_controller *, bool);
+	void (*status_cb)(struct mhi_controller *mhi_cntrl, void *priv,
+			  enum MHI_CB reason);
+	int (*link_status)(struct mhi_controller *mhi_cntrl, void *priv);
+	void (*wake_get)(struct mhi_controller *mhi_cntrl, bool override);
+	void (*wake_put)(struct mhi_controller *mhi_cntrl, bool override);
 	void (*wake_toggle)(struct mhi_controller *mhi_cntrl);
-	int (*runtime_get)(struct mhi_controller *, void *);
-	void (*runtime_put)(struct mhi_controller *, void *);
+	int (*runtime_get)(struct mhi_controller *mhi_cntrl, void *priv);
+	void (*runtime_put)(struct mhi_controller *mhi_cntrl, void *priv);
 	u64 (*time_get)(struct mhi_controller *mhi_cntrl, void *priv);
 	int (*lpm_disable)(struct mhi_controller *mhi_cntrl, void *priv);
 	int (*lpm_enable)(struct mhi_controller *mhi_cntrl, void *priv);
@@ -408,6 +420,7 @@ struct mhi_controller {
 	bool initiate_mhi_reset;
 	void *priv_data;
 	void *log_buf;
+	void *cntrl_log_buf;
 	struct dentry *dentry;
 	struct dentry *parent;
 
@@ -454,11 +467,11 @@ struct mhi_device {
 	atomic_t bus_vote;
 	enum mhi_device_type dev_type;
 	void *priv_data;
-	int (*ul_xfer)(struct mhi_device *, struct mhi_chan *, void *,
-		       size_t, enum MHI_FLAGS);
-	int (*dl_xfer)(struct mhi_device *, struct mhi_chan *, void *,
-		       size_t, enum MHI_FLAGS);
-	void (*status_cb)(struct mhi_device *, enum MHI_CB);
+	int (*ul_xfer)(struct mhi_device *mhi_dev, struct mhi_chan *mhi_chan,
+		       void *buf, size_t len, enum MHI_FLAGS flags);
+	int (*dl_xfer)(struct mhi_device *mhi_dev, struct mhi_chan *mhi_chan,
+		       void *buf, size_t size, enum MHI_FLAGS flags);
+	void (*status_cb)(struct mhi_device *mhi_dev, enum MHI_CB reason);
 };
 
 /**
@@ -507,11 +520,12 @@ struct mhi_buf {
  */
 struct mhi_driver {
 	const struct mhi_device_id *id_table;
-	int (*probe)(struct mhi_device *, const struct mhi_device_id *id);
-	void (*remove)(struct mhi_device *);
-	void (*ul_xfer_cb)(struct mhi_device *, struct mhi_result *);
-	void (*dl_xfer_cb)(struct mhi_device *, struct mhi_result *);
-	void (*status_cb)(struct mhi_device *, enum MHI_CB mhi_cb);
+	int (*probe)(struct mhi_device *mhi_dev,
+		     const struct mhi_device_id *id);
+	void (*remove)(struct mhi_device *mhi_dev);
+	void (*ul_xfer_cb)(struct mhi_device *mhi_dev, struct mhi_result *res);
+	void (*dl_xfer_cb)(struct mhi_device *mhi_dev, struct mhi_result *res);
+	void (*status_cb)(struct mhi_device *mhi_dev, enum MHI_CB mhi_cb);
 	struct device_driver driver;
 };
 
@@ -606,6 +620,35 @@ void mhi_device_get(struct mhi_device *mhi_dev, int vote);
  * @vote: requested vote (bus, device or both)
  */
 int mhi_device_get_sync(struct mhi_device *mhi_dev, int vote);
+
+/**
+ * mhi_device_get_sync_atomic - Asserts device_wait and moves device to M0
+ * @mhi_dev: Device associated with the channels
+ * @timeout_us: timeout, in micro-seconds
+ * @in_panic: If requested while kernel is in panic state and no ISRs expected
+ *
+ * The device_wake is asserted to keep device in M0 or bring it to M0.
+ * If device is not in M0 state, then this function will wait for device to
+ * move to M0, until @timeout_us elapses.
+ * However, if device's M1 state-change event races with this function
+ * then there is a possiblity of device moving from M0 to M2 and back
+ * to M0. That can't be avoided as host must transition device from M1 to M2
+ * as per the spec.
+ * Clients can ignore that transition after this function returns as the device
+ * is expected to immediately  move from M2 to M0 as wake is asserted and
+ * wouldn't enter low power state.
+ * If in_panic boolean is set, no ISRs are expected, hence this API will have to
+ * resort to reading the MHI status register and poll on M0 state change.
+ *
+ * Returns:
+ * 0 if operation was successful (however, M0 -> M2 -> M0 is possible later) as
+ * mentioned above.
+ * -ETIMEDOUT is device faled to move to M0 before @timeout_us elapsed
+ * -EIO if the MHI state is one of the ERROR states.
+ */
+int mhi_device_get_sync_atomic(struct mhi_device *mhi_dev,
+			       int timeout_us,
+			       bool in_panic);
 
 /**
  * mhi_device_put - re-enable low power modes
@@ -809,6 +852,12 @@ int mhi_get_remote_time_sync(struct mhi_device *mhi_dev,
 			     u64 *t_dev);
 
 /**
+ * mhi_get_exec_env - Return execution environment of the device
+ * @mhi_cntrl: MHI controller
+ */
+enum mhi_ee mhi_get_exec_env(struct mhi_controller *mhi_cntrl);
+
+/**
  * mhi_get_mhi_state - Return MHI state of device
  * @mhi_cntrl: MHI controller
  */
@@ -860,7 +909,7 @@ char *mhi_get_restart_reason(const char *name);
 #ifdef CONFIG_MHI_DEBUG
 
 #define MHI_VERB(fmt, ...) do { \
-		if (mhi_cntrl->klog_lvl <= MHI_MSG_VERBOSE) \
+		if (mhi_cntrl->klog_lvl <= MHI_MSG_LVL_VERBOSE) \
 			pr_dbg("[D][%s] " fmt, __func__, ##__VA_ARGS__);\
 } while (0)
 
@@ -870,8 +919,18 @@ char *mhi_get_restart_reason(const char *name);
 
 #endif
 
+#define MHI_CNTRL_LOG(fmt, ...) do {	\
+		if (mhi_cntrl->klog_lvl <= MHI_MSG_LVL_INFO) \
+			pr_info("[I][%s] " fmt, __func__, ##__VA_ARGS__);\
+} while (0)
+
+#define MHI_CNTRL_ERR(fmt, ...) do {	\
+		if (mhi_cntrl->klog_lvl <= MHI_MSG_LVL_ERROR) \
+			pr_err("[E][%s] " fmt, __func__, ##__VA_ARGS__); \
+} while (0)
+
 #define MHI_LOG(fmt, ...) do {	\
-		if (mhi_cntrl->klog_lvl <= MHI_MSG_INFO) \
+		if (mhi_cntrl->klog_lvl <= MHI_MSG_LVL_INFO) \
 			pr_info("[I][%s] " fmt, __func__, ##__VA_ARGS__);\
 } while (0)
 
@@ -910,6 +969,20 @@ char *mhi_get_restart_reason(const char *name);
 } while (0)
 
 #endif
+
+#define MHI_CNTRL_LOG(fmt, ...) do { \
+		if (mhi_cntrl->klog_lvl <= MHI_MSG_LVL_INFO) \
+			pr_err("[I][%s] " fmt, __func__, ##__VA_ARGS__);\
+		ipc_log_string(mhi_cntrl->cntrl_log_buf, "[I][%s] " fmt, \
+			       __func__, ##__VA_ARGS__); \
+} while (0)
+
+#define MHI_CNTRL_ERR(fmt, ...) do { \
+		if (mhi_cntrl->klog_lvl <= MHI_MSG_LVL_ERROR) \
+			pr_err("[E][%s] " fmt, __func__, ##__VA_ARGS__); \
+		ipc_log_string(mhi_cntrl->cntrl_log_buf, "[E][%s] " fmt, \
+			       __func__, ##__VA_ARGS__); \
+} while (0)
 
 #define MHI_LOG(fmt, ...) do {	\
 		if (mhi_cntrl->klog_lvl <= MHI_MSG_LVL_INFO) \
