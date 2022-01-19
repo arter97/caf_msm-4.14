@@ -154,6 +154,25 @@
 			__entry->width, __entry->center_freq1,		\
 			__entry->center_freq2
 
+#define FILS_AAD_ASSIGN(fa)                                                  \
+	do {                                                                 \
+		if (fa) {                                                    \
+			ether_addr_copy(__entry->macaddr, fa->macaddr);      \
+			memcpy(__entry->kek, fa->kek, fa->kek_len);          \
+			__entry->kek_len = fa->kek_len;                      \
+			memcpy(__entry->snonce, fa->snonce, FILS_NONCE_LEN); \
+			memcpy(__entry->anonce, fa->anonce, FILS_NONCE_LEN); \
+		} else {                                                     \
+			eth_zero_addr(__entry->macaddr);                     \
+			memset(__entry->kek, 0, FILS_MAX_KEK_LEN);           \
+			__entry->kek_len = 0;                                \
+			memset(__entry->snonce, 0, FILS_NONCE_LEN);          \
+			memset(__entry->anonce, 0, FILS_NONCE_LEN);          \
+		}                                                            \
+	} while (0)
+#define FILS_AAD_PR_FMT                                                      \
+	"macaddr: %pM, kek: %p, kek_len: %d, anonce: %p, snonce: %p"
+
 #define SINFO_ENTRY __field(int, generation)	    \
 		    __field(u32, connected_time)    \
 		    __field(u32, inactive_time)	    \
@@ -622,6 +641,11 @@ DEFINE_EVENT(wiphy_netdev_evt, rdev_leave_ocb,
 DEFINE_EVENT(wiphy_netdev_evt, rdev_flush_pmksa,
 	TP_PROTO(struct wiphy *wiphy, struct net_device *netdev),
 	TP_ARGS(wiphy, netdev)
+);
+
+DEFINE_EVENT(wiphy_netdev_evt, rdev_end_cac,
+	     TP_PROTO(struct wiphy *wiphy, struct net_device *netdev),
+	     TP_ARGS(wiphy, netdev)
 );
 
 DECLARE_EVENT_CLASS(station_add_change,
@@ -2357,6 +2381,28 @@ TRACE_EVENT(rdev_external_auth,
 	    TP_printk(WIPHY_PR_FMT ", " NETDEV_PR_FMT ", bssid: " MAC_PR_FMT
 		      ", ssid: %s, status: %u", WIPHY_PR_ARG, NETDEV_PR_ARG,
 		      __entry->bssid, __entry->ssid, __entry->status)
+);
+
+TRACE_EVENT(rdev_set_fils_aad,
+	TP_PROTO(struct wiphy *wiphy, struct net_device *netdev,
+		 struct cfg80211_fils_aad *fils_aad),
+	TP_ARGS(wiphy, netdev, fils_aad),
+	TP_STRUCT__entry(WIPHY_ENTRY
+			 NETDEV_ENTRY
+			 __array(u8, macaddr, ETH_ALEN)
+			 __array(u8, kek, FILS_MAX_KEK_LEN)
+			 __field(u8, kek_len)
+			 __array(u8, snonce, FILS_NONCE_LEN)
+			 __array(u8, anonce, FILS_NONCE_LEN)
+	),
+	TP_fast_assign(WIPHY_ASSIGN;
+		       NETDEV_ASSIGN;
+		       FILS_AAD_ASSIGN(fils_aad);
+	),
+	TP_printk(WIPHY_PR_FMT ", " NETDEV_PR_FMT ", " FILS_AAD_PR_FMT,
+		  WIPHY_PR_ARG, NETDEV_PR_ARG, __entry->macaddr,
+		  __entry->kek, __entry->kek_len, __entry->snonce,
+		  __entry->anonce)
 );
 
 /*************************************************************
