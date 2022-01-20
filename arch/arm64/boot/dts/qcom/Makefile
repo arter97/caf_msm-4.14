@@ -93,7 +93,9 @@ dtb-$(CONFIG_ARCH_QCS405) += qcs405-iot-sku1.dtb \
 		qcs405-iot-robot-reference-board.dtb \
 		qcs404-iot-robot-reference-board.dtb \
 		qcs405-iot-robot-reference-dvt-board.dtb \
-		qcs404-iot-robot-reference-dvt-board.dtb
+		qcs404-iot-robot-reference-dvt-board.dtb \
+		qcs405-pine-dvt.dtb \
+		qcs405-pine.dtb
 
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 	dtbo-$(CONFIG_ARCH_SM8150) += \

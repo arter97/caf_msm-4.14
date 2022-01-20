@@ -1,0 +1,88 @@
+/*
+ * SPDX-License-Identifier: GPL-2.0-only
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * 
+ */
+
+/dts-v1/;
+
+#include "qcs405.dtsi"
+#include "qcs405-wsa-audio-overlay.dtsi"
+#include "qcs405-circular-pca9956.dtsi"
+
+/ {
+	model = "Qualcomm Technologies, Inc. QCS405 Turbox C405 IOT WITH PINE";
+	compatible = "qcom,qcs405-iot", "qcom,qcs405", "qcom,iot";
+	qcom,board-id = <0x010020 4>;
+};
+
+&mdss_rgb {
+	status = "disabled";
+};
+
+&i2c_5 {
+	status = "ok";
+};
+
+&i2c_2 {
+	status = "disabled";
+};
+
+&smp2p_sleepstate {
+	status = "disabled";
+};
+
+&smb1351_otg_supply {
+	status = "disabled";
+};
+
+&soc {
+	gpio_keys {
+		vol_mute {
+			gpios = <&tlmm 19 GPIO_ACTIVE_LOW>;
+		};
+	};
+};
+
+&tlmm {
+	evb_tlmm_gpio_key{
+		tlmm_gpio_key_active: tlmm_gpio_key_active {
+			mux {
+				pins = "gpio19","gpio52","gpio54","gpio115";
+			};
+
+			config {
+				pins = "gpio19","gpio52","gpio54","gpio115";
+			};
+		};
+
+		tlmm_gpio_key_suspend: tlmm_gpio_key_suspend {
+			mux {
+				pins = "gpio19","gpio52","gpio54","gpio115";
+			};
+
+			config {
+				pins = "gpio19","gpio52","gpio54","gpio115";
+			};
+		};
+	};
+};
+
+&usb3 {
+	qcom,charging-disabled;
+	/delete-property/ extcon;
+};
+
+&usb2s {
+	qcom,charging-disabled;
+};
+
+&qcs405_snd {
+	qcom,tasha-codec = <0>;
+	qcom,wcn-btfm = <0>;
+	qcom,model = "qcs404-wsa-rb1-snd-card";
+};
+
+&wcd9335 {
+	status = "disabled";
+};
