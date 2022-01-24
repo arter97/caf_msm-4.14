@@ -3419,6 +3419,17 @@ void ethqos_ipa_offload_event_handler(void *data,
 		    qcom_ethqos_is_phy_link_up(eth_ipa_ctx.ethqos))
 			ethqos_enable_ipa_offload(eth_ipa_ctx.ethqos);
 
+		if (!eth_ipa_ctx.ipa_debugfs_exists &&
+		    eth_ipa_ctx.emac_dev_reset) {
+			if (!ethqos_ipa_create_debugfs(eth_ipa_ctx.ethqos)) {
+				ETHQOSERR("eMAC Debugfs created\n");
+				eth_ipa_ctx.ipa_debugfs_exists = true;
+			} else {
+				ETHQOSERR("eMAC Debugfs failed\n");
+			}
+		}
+		eth_ipa_ctx.emac_dev_reset = false;
+
 		break;
 	case EV_IPA_READY:
 		eth_ipa_ctx.ipa_ready = true;
@@ -3470,6 +3481,7 @@ void ethqos_ipa_offload_event_handler(void *data,
 
 		/* reset link down on dev close */
 		eth_ipa_ctx.ipa_offload_link_down = 0;
+		eth_ipa_ctx.emac_dev_reset = true;
 		ethqos_free_ipa_queue_mem(eth_ipa_ctx.ethqos);
 
 		break;
@@ -3537,7 +3549,7 @@ void ethqos_ipa_offload_event_handler(void *data,
 		break;
 	case EV_QTI_GET_CONN_STATUS:
 		if (eth_ipa_ctx.queue_enabled[IPA_QUEUE_CV2X])
-			*(u8 *)data = eth_ipa_ctx.ipa_offload_conn ?
+			*(u8 *)data = eth_ipa_ctx.ipa_offload_conn_cv2x ?
 			ETH_EVT_CV2X_PIPE_CONNECTED :
 			ETH_EVT_CV2X_PIPE_DISCONNECTED;
 		else
@@ -3579,7 +3591,8 @@ void ethqos_ipa_offload_event_handler(void *data,
 	if (eth_ipa_ctx.queue_enabled[IPA_QUEUE_CV2X] &&
 	    (ev == EV_USR_SUSPEND || ev == EV_USR_RESUME ||
 	     ev == EV_DEV_CLOSE || ev == EV_DEV_OPEN ||
-	     ev == EV_PHY_LINK_DOWN || ev ==  EV_PHY_LINK_UP)) {
+	     ev == EV_PHY_LINK_DOWN || ev ==  EV_PHY_LINK_UP ||
+	     ev == EV_IPA_SSR_DOWN || ev ==  EV_IPA_SSR_UP)) {
 		if (eth_ipa_ctx.ipa_offload_conn_prev_cv2x !=
 		    eth_ipa_ctx.ipa_offload_conn_cv2x)
 			ETHQOSDBG("need-status-updated\n");
