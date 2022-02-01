@@ -2910,7 +2910,8 @@ int gsi_start_channel(unsigned long chan_hdl)
 	/* check if INTSET is in IRQ mode for GPI channel */
 	val = gsi_readl(gsi_ctx->base +
 			GSI_EE_n_CNTXT_INTSET_OFFS(gsi_ctx->per.ee));
-	if (ctx->evtr->props.intf == GSI_EVT_CHTYPE_GPI_EV &&
+	if (ctx->evtr &&
+		ctx->evtr->props.intf == GSI_EVT_CHTYPE_GPI_EV &&
 		val != GSI_INTR_IRQ) {
 		GSIERR("GSI_EE_n_CNTXT_INTSET_OFFS %d\n", val);
 		BUG();
@@ -2993,7 +2994,8 @@ int gsi_stop_channel(unsigned long chan_hdl)
 	/* check if INTSET is in IRQ mode for GPI channel */
 	val = gsi_readl(gsi_ctx->base +
 			GSI_EE_n_CNTXT_INTSET_OFFS(gsi_ctx->per.ee));
-	if (ctx->evtr->props.intf == GSI_EVT_CHTYPE_GPI_EV &&
+	if (ctx->evtr &&
+		ctx->evtr->props.intf == GSI_EVT_CHTYPE_GPI_EV &&
 		val != GSI_INTR_IRQ) {
 		GSIERR("GSI_EE_n_CNTXT_INTSET_OFFS %d\n", val);
 		BUG();
