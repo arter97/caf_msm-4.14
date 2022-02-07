@@ -1042,9 +1042,11 @@ static int ethqos_mdio_read(struct stmmac_priv  *priv, int phyaddr, int phyreg)
 	u32 value = MII_BUSY;
 	struct qcom_ethqos *ethqos = priv->plat->bsp_priv;
 
-	if (ethqos->phy_state == PHY_IS_OFF) {
-		ETHQOSINFO("Phy is in off state reading is not possible\n");
-		return -EOPNOTSUPP;
+	if (!priv->plat->mac2mac_en) {
+		if (ethqos->phy_state == PHY_IS_OFF) {
+			ETHQOSINFO("Phy is in off state reading is not possible\n");
+			return -EOPNOTSUPP;
+		}
 	}
 
 	value |= (phyaddr << priv->hw->mii.addr_shift)
@@ -1245,14 +1247,12 @@ static ssize_t read_phy_reg_dump(struct file *file, char __user *user_buf,
 		ETHQOSERR("NULL Pointer\n");
 		return -EINVAL;
 	}
-	if (ethqos->phy_state == PHY_IS_OFF) {
-		ETHQOSINFO("Phy is in off state phy dump is not possible\n");
-		return -EOPNOTSUPP;
-	}
 
-	if (ethqos->phy_state == PHY_IS_OFF) {
-		ETHQOSINFO("Phy is in off state phy dump is not possible\n");
-		return -EOPNOTSUPP;
+	if (!priv->plat->mac2mac_en) {
+		if (ethqos->phy_state == PHY_IS_OFF) {
+			ETHQOSINFO("Phy is in off state phy dump is not possible\n");
+			return -EOPNOTSUPP;
+		}
 	}
 
 	buf = kzalloc(buf_len, GFP_KERNEL);
@@ -1703,6 +1703,11 @@ static ssize_t loopback_handling_config(
 		ETHQOSERR("Invalid config =%d\n", config);
 		return -EINVAL;
 	}
+	if (priv->current_loopback == ENABLE_PHY_LOOPBACK &&
+	    priv->plat->mac2mac_en) {
+		ETHQOSINFO("Not supported with Mac2Mac enabled\n");
+		return -EOPNOTSUPP;
+	}
 	if ((config == ENABLE_PHY_LOOPBACK  || priv->current_loopback ==
 			ENABLE_PHY_LOOPBACK) &&
 			ethqos->current_phy_mode == DISABLE_PHY_IMMEDIATELY) {
@@ -1988,6 +1993,8 @@ static int dwmac_qcom_handle_mac_err(void *pdata, int type, int chan)
 			switch (type) {
 			case PHY_RW_ERR:
 			{
+				if (priv->plat->mac2mac_en)
+					return -EOPNOTSUPP;
 				ret = ethqos_reset_phy_rec(priv, true);
 				if (!ret) {
 					ETHQOSERR("recovery failed for %s",
@@ -1998,6 +2005,8 @@ static int dwmac_qcom_handle_mac_err(void *pdata, int type, int chan)
 			break;
 			case PHY_DET_ERR:
 			{
+				if (priv->plat->mac2mac_en)
+					return -EOPNOTSUPP;
 				ret = ethqos_reset_phy_rec(priv, false);
 				if (!ret) {
 					ETHQOSERR("recovery failed for %s",
@@ -2247,11 +2256,14 @@ static int ethqos_create_debugfs(struct qcom_ethqos        *ethqos)
 	static struct dentry *loopback_enable_mode;
 
 	static struct dentry *mac_rec;
+	struct stmmac_priv *priv;
+
 	if (!ethqos) {
 		ETHQOSERR("Null Param %s\n", __func__);
 		return -ENOMEM;
 	}
 
+	priv = qcom_ethqos_get_priv(ethqos);
 	ethqos->debugfs_dir = debugfs_create_dir("eth", NULL);
 
 	if (!ethqos->debugfs_dir || IS_ERR(ethqos->debugfs_dir)) {
@@ -2283,12 +2295,15 @@ static int ethqos_create_debugfs(struct qcom_ethqos        *ethqos)
 			  ipc_stmmac_log_low);
 		goto fail;
 	}
-	phy_off = debugfs_create_file("phy_off", 0400,
-				      ethqos->debugfs_dir, ethqos,
-				      &fops_phy_off);
-	if (!phy_off || IS_ERR(phy_off)) {
-		ETHQOSERR("Can't create phy_off %x\n", phy_off);
-		goto fail;
+
+	if (!priv->plat->mac2mac_en) {
+		phy_off = debugfs_create_file("phy_off", 0400,
+					      ethqos->debugfs_dir, ethqos,
+					      &fops_phy_off);
+		if (!phy_off || IS_ERR(phy_off)) {
+			ETHQOSERR("Can't create phy_off %x\n", phy_off);
+			goto fail;
+		}
 	}
 
 	loopback_enable_mode = debugfs_create_file("loopback_enable_mode", 0400,
@@ -3066,6 +3081,7 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 			of_platform_depopulate(&pdev->dev);
 			ret = stmmac_emb_smmu_ctx.ret;
 			stmmac_emb_smmu_ctx.ret = 0;
+			goto err_clk;
 		}
 	}
 
@@ -3197,6 +3213,10 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 		/*Set early eth parameters*/
 		ethqos_set_early_eth_param(priv, ethqos);
 	}
+
+	if (priv->plat->mac2mac_en)
+		priv->plat->mac2mac_link = -1;
+
 #ifdef CONFIG_ETH_IPA_OFFLOAD
 	ethqos->ipa_enabled = true;
 	priv->rx_queue[IPA_DMA_RX_CH].skip_sw = true;
@@ -3368,21 +3388,26 @@ static int qcom_ethqos_resume(struct device *dev)
 		}
 	}
 
-	if (ethqos->phy_state == PHY_IS_OFF) {
-		/* Temp Enable LOOPBACK_EN.
-		 * TX clock needed for reset As Phy is off
-		 */
-		rgmii_updatel(ethqos, RGMII_CONFIG_LOOPBACK_EN,
-			      RGMII_CONFIG_LOOPBACK_EN,
-			      RGMII_IO_MACRO_CONFIG);
-		ETHQOSINFO("Loopback EN Enabled\n");
+	if (!priv->plat->mac2mac_en) {
+		if (ethqos->phy_state == PHY_IS_OFF) {
+			/* Temp Enable LOOPBACK_EN.
+			* TX clock needed for reset As Phy is off
+			*/
+			rgmii_updatel(ethqos, RGMII_CONFIG_LOOPBACK_EN,
+				      RGMII_CONFIG_LOOPBACK_EN,
+				      RGMII_IO_MACRO_CONFIG);
+			ETHQOSINFO("Loopback EN Enabled\n");
+		}
 	}
 	ret = stmmac_resume(dev);
-	if (ethqos->phy_state == PHY_IS_OFF) {
-		//Disable  LOOPBACK_EN
-		rgmii_updatel(ethqos, RGMII_CONFIG_LOOPBACK_EN,
-			      0, RGMII_IO_MACRO_CONFIG);
-		ETHQOSINFO("Loopback EN Disabled\n");
+
+	if (!priv->plat->mac2mac_en) {
+		if (ethqos->phy_state == PHY_IS_OFF) {
+			//Disable  LOOPBACK_EN
+			rgmii_updatel(ethqos, RGMII_CONFIG_LOOPBACK_EN,
+				      0, RGMII_IO_MACRO_CONFIG);
+			ETHQOSINFO("Loopback EN Disabled\n");
+		}
 	}
 	ethqos_ipa_offload_event_handler(NULL, EV_DPM_RESUME);
 
