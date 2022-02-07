@@ -48,5 +48,6 @@
 
 #define VIRTIO_ID_I2C		32 /* virtio i2c */
 #define VIRTIO_ID_SPMI		33 /* virtio spmi */
+#define VIRTIO_ID_PMEM         27 /* virtio pmem */
 
 #endif /* _LINUX_VIRTIO_IDS_H */
