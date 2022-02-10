@@ -14,10 +14,6 @@
 #include "sdxprairie-mtp.dtsi"
 #include "sa515m.dtsi"
 
-&mpss_adsp_mem {
-	reg = <0x90800000 0xf800000>;
-};
-
 &soc {
 	qmi-tmd-devices {
 		modem {
