@@ -206,5 +206,7 @@ struct plat_stmmacenet_data {
 	int mac2mac_rgmii_speed;
 	bool mac2mac_en;
 	int mac2mac_link;
+	bool wait_for_mac_rx_clk;
+	bool wait_for_emac_rx_clk;
 };
 #endif

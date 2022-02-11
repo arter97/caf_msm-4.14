@@ -83,6 +83,8 @@ static struct qmp_pkt pkt;
 static char qmp_buf[MAX_QMP_MSG_SIZE + 1] = {0};
 static struct ip_params pparams;
 
+#define RX_CLK_SYSFS_DEV_ATTR_PERMS 0644
+
 static void qcom_ethqos_read_iomacro_por_values(struct qcom_ethqos *ethqos)
 {
 	int i;
@@ -1224,6 +1226,77 @@ static const struct of_device_id qcom_ethqos_match[] = {
 	{}
 };
 
+static ssize_t read_ethqos_rx_clock(struct device *dev,
+				    struct device_attribute *attr,
+				    char *user_buf)
+{
+	struct net_device *netdev = to_net_dev(dev);
+	struct stmmac_priv *priv;
+	unsigned int BUFF_SZ = 2000;
+
+	if (!netdev) {
+		ETHQOSERR("NULL Pointer\n");
+		return -EINVAL;
+	}
+
+	priv = netdev_priv(netdev);
+
+	if(priv->plat->wait_for_mac_rx_clk)
+		return snprintf(user_buf, BUFF_SZ,
+				"waiting fox rx clock");
+	else
+		return snprintf(user_buf, BUFF_SZ,
+				"not waiting fox rx clock");
+
+}
+
+static ssize_t write_ethqos_rx_clock(struct device *dev,
+				    struct device_attribute *attr,
+				    const char *user_buffer,
+				    size_t count)
+{
+	unsigned long ret;
+	s8 input = 0;
+        struct net_device *netdev = to_net_dev(dev);
+	struct stmmac_priv *priv;
+	struct qcom_ethqos *ethqos;
+	struct plat_stmmacenet_data *plat;
+
+	if (!netdev) {
+		 ETHQOSERR("NULL Pointer\n");
+		return -EINVAL;
+	}
+
+	priv = netdev_priv(netdev);
+	ethqos = priv->plat->bsp_priv;
+
+	plat = priv->plat;
+
+	if (kstrtos8(user_buffer, 0, &input))
+		return -EFAULT;
+
+	if (input != 1) {
+		ETHQOSERR("invalid input\n");
+		return -EINVAL;
+	}
+
+	mutex_lock(&priv->lock);
+	if (plat->wait_for_mac_rx_clk) {
+		stmmac_mac2mac_adjust_link(priv->plat->mac2mac_rgmii_speed,
+					   priv);
+		stmmac_start_all_queues(priv);
+		netif_carrier_on(priv->dev);
+		plat->wait_for_mac_rx_clk = false;
+	}
+	mutex_unlock(&priv->lock);
+
+	return count;
+}
+
+static DEVICE_ATTR(rx_clock_rdy, RX_CLK_SYSFS_DEV_ATTR_PERMS,
+		   read_ethqos_rx_clock,
+		   write_ethqos_rx_clock);
+
 static ssize_t read_phy_reg_dump(struct file *file, char __user *user_buf,
 				 size_t count, loff_t *ppos)
 {
@@ -2257,11 +2330,15 @@ static int ethqos_create_debugfs(struct qcom_ethqos        *ethqos)
 
 	static struct dentry *mac_rec;
 	struct stmmac_priv *priv;
+	struct net_device *netdev;
+	int ret;
 
 	if (!ethqos) {
 		ETHQOSERR("Null Param %s\n", __func__);
 		return -ENOMEM;
 	}
+	netdev = platform_get_drvdata(ethqos->pdev);
+	priv = qcom_ethqos_get_priv(ethqos);
 
 	priv = qcom_ethqos_get_priv(ethqos);
 	ethqos->debugfs_dir = debugfs_create_dir("eth", NULL);
@@ -2320,6 +2397,14 @@ static int ethqos_create_debugfs(struct qcom_ethqos        *ethqos)
 	if (!mac_rec || IS_ERR(mac_rec)) {
 		ETHQOSERR("Can't create mac_rec directory");
 		goto fail;
+	}
+
+	if(priv->plat->wait_for_emac_rx_clk)
+	{
+		 ret = sysfs_create_file(&netdev->dev.kobj,
+			 		 &dev_attr_rx_clock_rdy.attr);
+		 if(ret)
+			 ETHQOSERR(" Can't create rx_clock_rdy sysfs node");
 	}
 
 	return 0;
@@ -3051,6 +3136,8 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 	else
 		ETHQOSINFO("mac2mac rgmii speed = %d\n",
 			   plat_dat->mac2mac_rgmii_speed);
+	plat_dat->wait_for_emac_rx_clk = of_property_read_bool(np, "wait_for_emac_rx_clk");
+	plat_dat->wait_for_mac_rx_clk = false;
 
 	if (of_property_read_bool(pdev->dev.of_node, "qcom,arm-smmu")) {
 		stmmac_emb_smmu_ctx.pdev_master = pdev;
