@@ -711,6 +711,9 @@ static int stmmac_ethtool_op_get_eee(struct net_device *dev,
 	if (!priv->dma_cap.eee)
 		return -EOPNOTSUPP;
 
+	if (priv->plat->mac2mac_en)
+		return -EOPNOTSUPP;
+
 	edata->eee_enabled = priv->eee_enabled;
 	edata->eee_active = priv->eee_active;
 	edata->tx_lpi_timer = priv->tx_lpi_timer;
@@ -723,6 +726,9 @@ static int stmmac_ethtool_op_set_eee(struct net_device *dev,
 {
 	struct stmmac_priv *priv = netdev_priv(dev);
 	int ret;
+
+	if (priv->plat->mac2mac_en)
+		return -EOPNOTSUPP;
 
 	if (!edata->eee_enabled) {
 		stmmac_disable_eee_mode(priv);
