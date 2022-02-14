@@ -54,3 +54,30 @@
 	qcom,default-policy-nop;
 	status = "okay";
 };
+
+&mtl_rx_setup {
+	queue2 {
+		snps,dcb-algorithm;
+	};
+
+	queue3 {
+		snps,dcb-algorithm;
+	};
+};
+
+&mtl_tx_setup {
+	queue2 {
+		snps,dcb-algorithm;
+	};
+
+	queue3 {
+		snps,dcb-algorithm;
+	};
+};
+
+&ethqos_hw {
+	snps,mtl-rx-config = <&mtl_rx_setup>;
+	snps,mtl-tx-config = <&mtl_tx_setup>;
+	mac2mac;
+	mac2mac-rgmii-speed = <1000>;
+};
