@@ -296,6 +296,12 @@ static inline u32 stmmac_rx_dirty(struct stmmac_priv *priv, u32 queue)
 static inline void stmmac_hw_fix_mac_speed(struct stmmac_priv *priv)
 {
 	if (likely(priv->plat->fix_mac_speed)) {
+		if (priv->plat->mac2mac_en) {
+			priv->plat->fix_mac_speed(priv->plat->bsp_priv,
+					priv->speed);
+			return;
+		}
+
 		if (priv->phydev->link)
 			priv->plat->fix_mac_speed(priv->plat->bsp_priv,
 						  priv->speed);
@@ -2740,6 +2746,27 @@ static void stmmac_hw_teardown(struct net_device *dev)
 	clk_disable_unprepare(priv->plat->clk_ptp_ref);
 }
 
+void stmmac_mac2mac_adjust_link(int speed, struct stmmac_priv *priv)
+{
+	u32 ctrl = readl_relaxed(priv->ioaddr + MAC_CTRL_REG);
+
+	ctrl &= ~priv->hw->link.speed_mask;
+
+	if (speed == SPEED_1000) {
+		ctrl |= priv->hw->link.speed1000;
+		priv->speed = SPEED_1000;
+	} else if (speed == SPEED_100) {
+		ctrl |= priv->hw->link.speed100;
+		priv->speed = SPEED_100;
+	} else {
+		ctrl |= priv->hw->link.speed10;
+		priv->speed = SPEED_10;
+	}
+
+	stmmac_hw_fix_mac_speed(priv);
+	writel_relaxed(ctrl, priv->ioaddr + MAC_CTRL_REG);
+}
+
 /**
  *  stmmac_open - open entry point of the driver
  *  @dev : pointer to the device structure.
@@ -2852,23 +2879,10 @@ static int stmmac_open(struct net_device *dev)
 		priv->plat->update_ahb_clk_cfg(priv, 0, 0);
 
 	if (priv->plat->mac2mac_en) {
-		u32 ctrl = readl_relaxed(priv->ioaddr + MAC_CTRL_REG);
-
-		ctrl &= ~priv->hw->link.speed_mask;
-
-		if (priv->plat->mac2mac_rgmii_speed == SPEED_1000) {
-			ctrl |= priv->hw->link.speed1000;
-			priv->speed = SPEED_1000;
-		} else if (priv->plat->mac2mac_rgmii_speed == SPEED_100) {
-			ctrl |= priv->hw->link.speed100;
-			priv->speed = SPEED_100;
-		} else {
-			ctrl |= priv->hw->link.speed10;
-			priv->speed = SPEED_10;
-		}
-
-		stmmac_hw_fix_mac_speed(priv);
-		writel_relaxed(ctrl, priv->ioaddr + MAC_CTRL_REG);
+		stmmac_mac2mac_adjust_link(priv->plat->mac2mac_rgmii_speed,
+					   priv);
+		priv->plat->mac2mac_link = true;
+		netif_carrier_on(dev);
 	}
 
 	return 0;
@@ -4890,6 +4904,13 @@ int stmmac_resume(struct device *dev)
 	stmmac_enable_all_queues(priv);
 
 	stmmac_start_all_queues(priv);
+
+	if (priv->plat->mac2mac_en) {
+		stmmac_mac2mac_adjust_link(priv->plat->mac2mac_rgmii_speed,
+					   priv);
+		priv->plat->mac2mac_link = true;
+		netif_carrier_on(ndev);
+	}
 
 	mutex_unlock(&priv->lock);
 
