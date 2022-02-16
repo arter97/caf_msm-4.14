@@ -1625,7 +1625,7 @@
 	};
 
 	bluetooth: bt_wcn3990 {
-		status = "disabled";
+	//	status = "disabled";
 		compatible = "qca,wcn3990";
 		qca,bt-vdd-xtal-supply = <&pms405_l5>;
 		qca,bt-vdd-io-supply = <&pms405_l6>;
