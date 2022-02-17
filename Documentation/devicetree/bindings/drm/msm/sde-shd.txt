@@ -39,6 +39,9 @@ Optional properties:
 - qcom,inithandoff-display:  A phandle property used to mention the shared displays which has to
 			be handoff when there is first commit on the shared display where this
 			flag is defined.
+- qcom,qcom,dspp-enable:  A boolean property to indicate if the DSPP to be enabled for this shared
+			display. The DSPP can be enabled for only one of the shared display of a
+			given base display.
 
 qcom,shared-display-base properties:
 
@@ -163,6 +166,23 @@ shared display resources.
 
 	sde_sh0: qcom,shared-display@0 {
 		qcom,inithandoff-display = <&sde_sh1 &sde_sh2>
+	};
+
+	sde_sh1: qcom,shared-display@1 {
+		...
+	};
+
+	sde_sh2: qcom,shared-display@2 {
+		...
+	};
+};
+
+Example of qcom,qcom,dspp-enable property to enable DSPP for a shared display.
+/ {
+	...
+
+	sde_sh0: qcom,shared-display@0 {
+		qcom,qcom,dspp-enable;
 	};
 
 	sde_sh1: qcom,shared-display@1 {
