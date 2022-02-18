@@ -94,10 +94,6 @@
 	};
 };
 
-&mpss_adsp_mem {
-	reg = <0x90800000 0xda00000>;
-};
-
 /* delete pm8150b nodes */
 &thermal_zones {
 	/delete-node/ pm8150b-wp-therm;

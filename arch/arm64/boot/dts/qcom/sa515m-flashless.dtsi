@@ -12,10 +12,6 @@
 
 #include "sdxprairie.dtsi"
 
-&mpss_adsp_mem {
-	reg = <0x90800000 0xf800000>;
-};
-
 &pil_modem {
 	qcom,auto-boot;
 };
