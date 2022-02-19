@@ -649,3 +649,52 @@
 		};
 	};
 };
+
+/* for usb begin */
+&usb1 {
+	status = "okay";
+	qcom,default-mode-host;
+	qcom,ignore-wakeup-src-in-hostmode;
+
+	qcom,use-ext-vbus-ctrl;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&usb1_vbus_on>;
+	pinctrl-1 = <&usb1_vbus_off>;
+};
+
+&L14A {
+	regulator-always-on;
+};
+
+&tlmm {
+	usb1_vbus_cntl {
+			usb1_vbus_on: usb1_vbus_on {
+					mux {
+							pins = "gpio54";
+							function = "gpio";
+					};
+
+					config {
+							pins = "gpio54";
+							drive-strength = <2>;   /* 2 mA */
+							bias-disable;
+							output-high;
+					};
+			};
+
+			usb1_vbus_off: usb1_vbus_off {
+					mux {
+							pins = "gpio54";
+							function = "gpio";
+					};
+
+					config {
+							pins = "gpio54";
+							drive-strength = <2>;   /* 2 mA */
+							bias-pull-down;         /* PULL DOWN */
+							output-low;
+					};
+			};
+	};
+};
+/* for usb end */
