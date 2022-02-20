@@ -155,7 +155,20 @@ extern void fixup_busy_time(struct task_struct *p, int new_cpu);
 extern void init_new_task_load(struct task_struct *p);
 extern void mark_task_starting(struct task_struct *p);
 extern void set_window_start(struct rq *rq);
-void account_irqtime(int cpu, struct task_struct *curr, u64 delta,
+void walt_update_task_ravg(struct task_struct *p, struct rq *rq, int event,
+		u64 wallclock, u64 irqtime);
+void walt_inc_cumulative_runnable_avg(struct rq *rq, struct task_struct *p);
+void walt_dec_cumulative_runnable_avg(struct rq *rq, struct task_struct *p);
+void walt_fixup_cumulative_runnable_avg(struct rq *rq, struct task_struct *p,
+					u64 new_task_load);
+
+void walt_fixup_busy_time(struct task_struct *p, int new_cpu);
+void walt_init_new_task_load(struct task_struct *p);
+void walt_mark_task_starting(struct task_struct *p);
+void walt_set_window_start(struct rq *rq, struct rq_flags *rf);
+void walt_migrate_sync_cpu(int cpu);
+u64 walt_ktime_clock(void);
+void walt_account_irqtime(int cpu, struct task_struct *curr, u64 delta,
                                   u64 wallclock);
 extern bool do_pl_notif(struct rq *rq);
 
@@ -314,6 +327,19 @@ static inline void walt_enable_frequency_aggregation(bool enable)
 #else /* CONFIG_SCHED_WALT */
 
 static inline void walt_sched_init_rq(struct rq *rq) { }
+static inline void walt_update_task_ravg(struct task_struct *p, struct rq *rq,
+		int event, u64 wallclock, u64 irqtime) { }
+static inline void walt_fixup_cumulative_runnable_avg(struct rq *rq,
+						      struct task_struct *p,
+						      u64 new_task_load) { }
+static inline void walt_fixup_busy_time(struct task_struct *p, int new_cpu) { }
+static inline void walt_init_new_task_load(struct task_struct *p) { }
+static inline void walt_mark_task_starting(struct task_struct *p) { }
+static inline void walt_set_window_start(struct rq *rq, struct rq_flags *rf) { }
+static inline void walt_migrate_sync_cpu(int cpu) { }
+static inline u64 walt_ktime_clock(void) { return 0; }
+
+#define walt_cpu_high_irqload(cpu) false
 
 static inline void walt_rotate_work_init(void) { }
 static inline void walt_rotation_checkpoint(int nr_big) { }
