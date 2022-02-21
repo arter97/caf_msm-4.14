@@ -1856,9 +1856,12 @@ static void mhi_dev_process_reset_cmd(struct mhi_dev *mhi, int ch_id)
 	 * event in the next flush operation.
 	 */
 	spin_lock_irqsave(&mhi_ctx->lock, flags);
-	list_for_each_entry_safe(itr, tmp, &ch->flush_event_req_buffers, list) {
-		list_del(&itr->list);
-		kfree(itr);
+	if (!list_empty(&ch->flush_event_req_buffers)) {
+		list_for_each_entry_safe(itr, tmp,
+				&ch->flush_event_req_buffers, list) {
+			list_del(&itr->list);
+			kfree(itr);
+		}
 	}
 	spin_unlock_irqrestore(&mhi_ctx->lock, flags);
 
@@ -1985,10 +1988,6 @@ static int mhi_dev_process_cmd_ring(struct mhi_dev *mhi,
 					return rc;
 				}
 			}
-			mutex_lock(&mhi->ch[ch_id].ch_lock);
-			mhi_dev_alloc_evt_buf_evt_req(mhi, &mhi->ch[ch_id],
-					evt_ring);
-			mutex_unlock(&mhi->ch[ch_id].ch_lock);
 		}
 
 		if (MHI_USE_DMA(mhi))
@@ -3108,10 +3107,7 @@ static int mhi_dev_alloc_evt_buf_evt_req(struct mhi_dev *mhi,
 	int rc;
 	uint32_t size, i;
 
-	if (evt_ring)
-		size = evt_ring->ring_size;
-	else
-		size = mhi_dev_get_evt_ring_size(mhi, ch->ch_id);
+	size = mhi_dev_get_evt_ring_size(mhi, ch->ch_id);
 
 	if (!size) {
 		mhi_log(MHI_MSG_VERBOSE,
@@ -4206,6 +4202,8 @@ static int mhi_init(struct mhi_dev *mhi)
 		for (i = 0; i < mhi->cfg.channels; i++) {
 			mhi->ch[i].ch_id = i;
 			mutex_init(&mhi->ch[i].ch_lock);
+			INIT_LIST_HEAD(&mhi->ch[i].event_req_buffers);
+			INIT_LIST_HEAD(&mhi->ch[i].flush_event_req_buffers);
 		}
 	}
 
