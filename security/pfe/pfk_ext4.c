@@ -38,7 +38,6 @@
 
 #include "fscrypt_ice.h"
 #include "pfk_ext4.h"
-//#include "ext4_ice.h"
 
 static bool pfk_ext4_ready;
 
