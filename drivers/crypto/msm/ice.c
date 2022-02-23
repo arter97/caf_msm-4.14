@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2020,2021 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,7 +25,6 @@
 #include <soc/qcom/scm.h>
 #include <soc/qcom/qseecomi.h>
 #include "iceregs.h"
-#include <linux/pfk.h>
 #include <linux/atomic.h>
 #include <linux/wait.h>
 
@@ -627,7 +626,7 @@ out:
 }
 
 static int qcom_ice_get_device_tree_data(struct platform_device *pdev,
-		struct ice_device *ice_dev)
+					 struct ice_device *ice_dev)
 {
 	struct device *dev = &pdev->dev;
 	int rc = -1;
@@ -1201,12 +1200,6 @@ static int qcom_ice_finish_power_collapse(struct ice_device *ice_dev)
 			if (err)
 				goto out;
 
-			/*
-			 * for PFE case, clear the cached ICE key table,
-			 * this will force keys to be reconfigured
-			 * per each next transaction
-			 */
-			pfk_clear_on_reset();
 		}
 	}
 
@@ -1443,7 +1436,7 @@ static void qcom_ice_debug(struct platform_device *pdev)
 
 	qcom_ice_dump_test_bus(ice_dev);
 	pr_err("%s: ICE reset start time: %llu ICE reset done time: %llu\n",
-			ice_dev->ice_instance_type,
+		ice_dev->ice_instance_type,
 		(unsigned long long)ice_dev->ice_reset_start_time,
 		(unsigned long long)ice_dev->ice_reset_complete_time);
 
@@ -1477,10 +1470,7 @@ static int qcom_ice_config_start(struct platform_device *pdev,
 		struct request *req,
 		struct ice_data_setting *setting, bool async)
 {
-	struct ice_crypto_setting pfk_crypto_data = {0};
 	struct ice_crypto_setting ice_data = {0};
-	int ret = 0;
-	bool is_pfe = false;
 	unsigned long sec_end = 0;
 	sector_t data_size;
 	struct ice_device *ice_dev;
@@ -1517,24 +1507,10 @@ static int qcom_ice_config_start(struct platform_device *pdev,
 	if (async)
 		atomic_set(&ice_dev->is_ice_busy, 1);
 
-	ret = pfk_load_key_start(req->bio, &pfk_crypto_data, &is_pfe, async);
-
 	if (async) {
 		atomic_set(&ice_dev->is_ice_busy, 0);
 		wake_up_interruptible(&ice_dev->block_suspend_ice_queue);
 	}
-	if (is_pfe) {
-		if (ret) {
-			if (ret != -EBUSY && ret != -EAGAIN)
-				pr_err("%s error %d while configuring ice key for PFE\n",
-						__func__, ret);
-			return ret;
-		}
-
-		return qti_ice_setting_config(req, pdev,
-				&pfk_crypto_data, setting, ICE_CRYPTO_CXT_FBE);
-	}
-
 	if (ice_fde_flag && req->part && req->part->info
 				&& req->part->info->volname[0]) {
 		if (!strcmp(req->part->info->volname, "userdata")) {
@@ -1577,8 +1553,6 @@ EXPORT_SYMBOL(qcom_ice_config_start);
 
 static int qcom_ice_config_end(struct request *req)
 {
-	int ret = 0;
-	bool is_pfe = false;
 
 	if (!req) {
 		pr_err("%s: Invalid params passed\n", __func__);
@@ -1589,15 +1563,6 @@ static int qcom_ice_config_end(struct request *req)
 		/* It is not an error to have a request with no  bio */
 		return 0;
 	}
-	ret = pfk_load_key_end(req->bio, &is_pfe);
-	if (is_pfe) {
-		if (ret != 0)
-			pr_err("%s error %d while end configuring ice key for PFE\n",
-								__func__, ret);
-		return ret;
-	}
-
-
 	return 0;
 }
 EXPORT_SYMBOL(qcom_ice_config_end);
@@ -1805,7 +1770,6 @@ int qcom_ice_setup_ice_hw(const char *storage_type, int enable)
 
 	if (!ice_dev || (ice_dev->is_ice_enabled == false))
 		return ret;
-
 	if (enable)
 		return enable_ice_setup(ice_dev);
 	else

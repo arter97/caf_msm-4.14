@@ -23,6 +23,7 @@
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/fs.h>
+#include <linux/fscrypt.h>
 #include <linux/mm.h>
 #include <linux/slab.h>
 #include <linux/highmem.h>
@@ -439,6 +440,7 @@ dio_bio_alloc(struct dio *dio, struct dio_submit *sdio,
 	      sector_t first_sector, int nr_vecs)
 {
 	struct bio *bio;
+	struct inode *inode = dio->inode;
 
 	/*
 	 * bio_alloc() is guaranteed to return a bio when called with
@@ -446,14 +448,9 @@ dio_bio_alloc(struct dio *dio, struct dio_submit *sdio,
 	 */
 	bio = bio_alloc(GFP_KERNEL, nr_vecs);
 
-#ifdef CONFIG_PFK
-	bio->bi_dio_inode = dio->inode;
-	if (dio_fstype_sets_dun(dio))
-		fscrypt_set_bio_crypt_ctx(bio, dio->inode,
-			sdio->cur_page_fs_offset >> dio->inode->i_blkbits,
-			GFP_KERNEL);
-#endif
-
+	fscrypt_set_bio_crypt_ctx(bio, inode,
+				  sdio->cur_page_fs_offset >> inode->i_blkbits,
+				  GFP_KERNEL);
 	bio_set_dev(bio, bdev);
 	bio->bi_iter.bi_sector = first_sector;
 	bio_set_op_attrs(bio, dio->op, dio->op_flags);
@@ -838,19 +835,16 @@ static inline int dio_send_cur_page(struct dio *dio, struct dio_submit *sdio,
 		 * be the next logical offset in the bio, submit the bio we
 		 * have.
 		 *
-		 * When fscrypt inline encryption is used, DUN (data unit
-		 * number) contiguity is also required.  Normally that's implied
-		 * by logical contiguity.  But with the IV_INO_LBLK_32 IV
-		 * generation method, the DUN may wrap from 0xffffffff to 0 in
-		 * logically contiguous blocks.  So we must explicitly check
-		 * fscrypt_mergeable_bio() too.
+		 * When fscrypt inline encryption is used, data unit number
+		 * (DUN) contiguity is also required.  Normally that's implied
+		 * by logical contiguity.  However, certain IV generation
+		 * methods (e.g. IV_INO_LBLK_32) don't guarantee it.  So, we
+		 * must explicitly check fscrypt_mergeable_bio() too.
 		 */
 		if (sdio->final_block_in_bio != sdio->cur_page_block ||
 		    cur_offset != bio_next_offset ||
-		    (dio_fstype_sets_dun(dio) &&
-		     !fscrypt_mergeable_bio(sdio->bio, dio->inode,
-					    cur_offset >>
-					    dio->inode->i_blkbits)))
+		    !fscrypt_mergeable_bio(sdio->bio, dio->inode,
+					   cur_offset >> dio->inode->i_blkbits))
 			dio_bio_submit(dio, sdio);
 	}
 
@@ -895,6 +889,7 @@ submit_page_section(struct dio *dio, struct dio_submit *sdio, struct page *page,
 		    struct buffer_head *map_bh)
 {
 	int ret = 0;
+	int boundary = sdio->boundary;	/* dio_send_cur_page may clear it */
 
 	if (dio->op == REQ_OP_WRITE) {
 		/*
@@ -933,10 +928,10 @@ submit_page_section(struct dio *dio, struct dio_submit *sdio, struct page *page,
 	sdio->cur_page_fs_offset = sdio->block_in_file << sdio->blkbits;
 out:
 	/*
-	 * If sdio->boundary then we want to schedule the IO now to
+	 * If boundary then we want to schedule the IO now to
 	 * avoid metadata seeks.
 	 */
-	if (sdio->boundary) {
+	if (boundary) {
 		ret = dio_send_cur_page(dio, sdio, map_bh);
 		if (sdio->bio)
 			dio_bio_submit(dio, sdio);
