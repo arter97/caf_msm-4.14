@@ -91,6 +91,7 @@ struct msm_watchdog_data {
 
 	struct task_struct *watchdog_task;
 	struct timer_list pet_timer;
+	struct timer_list user_pet_timer;
 	wait_queue_head_t pet_complete;
 
 	bool timer_expired;
@@ -167,6 +168,11 @@ static int msm_watchdog_suspend(struct device *dev)
 	mb();
 	wdog_dd->enabled = false;
 	wdog_dd->last_pet = sched_clock();
+
+
+	if (wdog_dd->user_pet_enabled)
+		del_timer_sync(&wdog_dd->user_pet_timer);
+
 	return 0;
 }
 
@@ -174,6 +180,8 @@ static int msm_watchdog_resume(struct device *dev)
 {
 	struct msm_watchdog_data *wdog_dd =
 			(struct msm_watchdog_data *)dev_get_drvdata(dev);
+	unsigned long delay_time = 0;
+
 	if (!enable)
 		return 0;
 	if (wdog_dd->wakeup_irq_enable) {
@@ -189,6 +197,13 @@ static int msm_watchdog_resume(struct device *dev)
 	mb();
 	wdog_dd->enabled = true;
 	wdog_dd->last_pet = sched_clock();
+
+	if (wdog_dd->user_pet_enabled) {
+		delay_time = msecs_to_jiffies(wdog_dd->bark_time + 3 * 1000);
+		wdog_dd->user_pet_timer.expires = jiffies + delay_time;
+		add_timer(&wdog_dd->user_pet_timer);
+	}
+
 	return 0;
 }
 
@@ -227,6 +242,10 @@ static void wdog_disable(struct msm_watchdog_data *wdog_dd)
 	atomic_notifier_chain_unregister(&panic_notifier_list,
 						&wdog_dd->panic_blk);
 	del_timer_sync(&wdog_dd->pet_timer);
+
+	if (wdog_dd->user_pet_enabled)
+		del_timer_sync(&wdog_dd->user_pet_timer);
+
 	/* may be suspended after the first write above */
 	__raw_writel(0, wdog_dd->base + WDT0_EN);
 	/* Make sure watchdog is disabled before setting enable */
@@ -328,12 +347,21 @@ static ssize_t wdog_user_pet_enabled_set(struct device *dev,
 {
 	int ret;
 	struct msm_watchdog_data *wdog_dd = dev_get_drvdata(dev);
+	unsigned long delay_time = 0;
+	bool already_enabled = wdog_dd->user_pet_enabled;
 
 	ret = strtobool(buf, &wdog_dd->user_pet_enabled);
 	if (ret) {
 		dev_err(wdog_dd->dev, "invalid user input\n");
 		return ret;
 	}
+
+	delay_time = msecs_to_jiffies(wdog_dd->bark_time + 3 * 1000);
+
+	if (wdog_dd->user_pet_enabled)
+		mod_timer(&wdog_dd->user_pet_timer, jiffies + delay_time);
+	else if (already_enabled)
+		del_timer_sync(&wdog_dd->user_pet_timer);
 
 	__wdog_user_pet(wdog_dd);
 
@@ -504,6 +532,10 @@ static int msm_watchdog_remove(struct platform_device *pdev)
 		free_percpu(wdog_dd->wdog_cpu_dd);
 	dev_info(wdog_dd->dev, "MSM Watchdog Exit - Deactivated\n");
 	del_timer_sync(&wdog_dd->pet_timer);
+
+	if (wdog_dd->user_pet_enabled)
+		del_timer_sync(&wdog_dd->user_pet_timer);
+
 	kthread_stop(wdog_dd->watchdog_task);
 	kfree(wdog_dd);
 	return 0;
@@ -527,6 +559,17 @@ void msm_trigger_wdog_bite(void)
 		__raw_readl(wdog_data->base + WDT0_EN),
 		__raw_readl(wdog_data->base + WDT0_BARK_TIME),
 		__raw_readl(wdog_data->base + WDT0_BITE_TIME));
+}
+
+static void qcom_wdt_user_pet_bite(struct timer_list *t)
+{
+	struct msm_watchdog_data *wdog_dd =
+	from_timer(wdog_dd, t, user_pet_timer);
+
+	if (!wdog_dd->user_pet_complete) {
+		dev_info(wdog_dd->dev, "QCOM Apps Watchdog user pet timeout!\n");
+		msm_trigger_wdog_bite();
+	}
 }
 
 static irqreturn_t wdog_bark_handler(int irq, void *dev_id)
@@ -762,6 +805,7 @@ static void init_watchdog_data(struct msm_watchdog_data *wdog_dd)
 	wdog_dd->pet_timer.function = pet_task_wakeup;
 	wdog_dd->pet_timer.expires = jiffies + delay_time;
 	add_timer(&wdog_dd->pet_timer);
+	timer_setup(&wdog_dd->user_pet_timer, qcom_wdt_user_pet_bite, 0);
 
 	val = BIT(EN);
 	if (wdog_dd->wakeup_irq_enable)
