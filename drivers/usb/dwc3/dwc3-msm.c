@@ -3971,6 +3971,7 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 	struct dwc3_msm *mdwc;
 	struct dwc3	*dwc;
 	struct resource *res;
+	struct pinctrl *pinctrl;
 	int ret = 0, i;
 	u32 val;
 	unsigned long irq_type;
@@ -4027,6 +4028,15 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_dbg(&pdev->dev, "setting lpm_to_suspend_delay to zero.\n");
 		mdwc->lpm_to_suspend_delay = 0;
+	}
+
+	ret = of_property_read_bool(node,
+				"qcom,use-ext-vbus-ctrl");
+	if (ret) {
+		pinctrl = devm_pinctrl_get_select(&pdev->dev, "default");
+		if (IS_ERR(pinctrl)) {
+			dev_err(&pdev->dev, "externel vbus pinctrl set failed\n");
+		}
 	}
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "core_base");
