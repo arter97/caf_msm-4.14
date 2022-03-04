@@ -2885,215 +2885,8 @@ int cnss_pci_alloc_fw_mem(struct cnss_plat_data *plat_priv)
 	struct cnss_fw_mem *fw_mem = plat_priv->fw_mem;
 	struct device *dev;
 	int i;
-#if 0
-//#ifndef CONFIG_CNSS2_SMMU
-	int idx, mode;
-	unsigned int bdf_location[MAX_TGT_MEM_MODES];
-	unsigned int caldb_location[MAX_TGT_MEM_MODES];
-	u32 addr = 0;
-	u32 caldb_size = 0;
-	u32 hremote_size = 0;
-	struct device_node *dev_node = NULL;
-	struct resource m3_dump;
-
-	dev = &plat_priv->plat_dev->dev;
-
-	if ((plat_priv->device_id == QCA8074_DEVICE_ID ||
-	     plat_priv->device_id == QCA8074V2_DEVICE_ID ||
-	     plat_priv->device_id == QCA5018_DEVICE_ID ||
-	     plat_priv->device_id == QCA6018_DEVICE_ID) &&
-	    of_property_read_u32_array(dev->of_node, "qcom,caldb-addr",
-				       caldb_location,
-				       ARRAY_SIZE(caldb_location))) {
-		pr_err("Error: Couldn't read caldb_addr from device_tree\n");
-		CNSS_ASSERT(0);
-		return -EINVAL;
-	}
-
-	if (plat_priv->device_id == QCN9000_DEVICE_ID) {
-		for (i = 0; i < plat_priv->fw_mem_seg_len; i++) {
-			switch (fw_mem[i].type) {
-			case CALDB_MEM_REGION_TYPE:
-				if (!plat_priv->cold_boot_support) {
-					break;
-				}
-				if (of_property_read_u32(dev->of_node,
-							 "caldb-size",
-							 &caldb_size)) {
-					pr_err("Error: No caldb-size in dts\n");
-					CNSS_ASSERT(0);
-					return -ENOMEM;
-				}
-				if (fw_mem[i].size > caldb_size) {
-					pr_err("Error: Need more memory for caldb, fw req:0x%x max:0x%x\n",
-					       (unsigned int)fw_mem[i].size,
-					       caldb_size);
-					CNSS_ASSERT(0);
-				}
-				if (of_property_read_u32(dev->of_node,
-							 "caldb-addr",
-							 &addr)) {
-					pr_err("Error: No caldb-addr in dts\n");
-					CNSS_ASSERT(0);
-					return -ENOMEM;
-				}
-				fw_mem[i].pa = (phys_addr_t)addr;
-				fw_mem[i].va = ioremap(fw_mem[i].pa,
-						       fw_mem[i].size);
-				if (!fw_mem[i].va)
-					pr_err("WARNING caldb remap failed\n");
-				break;
-			case HOST_DDR_REGION_TYPE:
-				if (of_property_read_u32(dev->of_node,
-							 "hremote-size",
-							 &hremote_size)) {
-					pr_err("Error: No hremote-size in dts\n");
-					CNSS_ASSERT(0);
-					return -ENOMEM;
-				}
-				if (fw_mem[i].size > hremote_size) {
-					pr_err("Error: Need more memory %x\n",
-					       (unsigned int)fw_mem[i].size);
-					CNSS_ASSERT(0);
-				}
-				if (of_property_read_u32(dev->of_node,
-							 "base-addr",
-							 &addr)) {
-					pr_err("Error: No base-addr in dts\n");
-					CNSS_ASSERT(0);
-					return -ENOMEM;
-				}
-				fw_mem[i].pa = (phys_addr_t)addr;
-				fw_mem[i].va = ioremap(fw_mem[i].pa,
-						       fw_mem[i].size);
-				if (!fw_mem[i].va)
-					pr_err("WARNING: Host DDR remap failed\n");
-				break;
-			case M3_DUMP_REGION_TYPE:
-				if (fw_mem[i].size > Q6_M3_DUMP_SIZE_QCN9000) {
-					pr_err("Error: Need more memory %x\n",
-					       (unsigned int)fw_mem[i].size);
-					CNSS_ASSERT(0);
-				}
-				if (of_property_read_u32(dev->of_node,
-							 "m3-dump-addr",
-							 &addr)) {
-					pr_err("Error: No m3-dump-addr in dts\n");
-					CNSS_ASSERT(0);
-					return -ENOMEM;
-				}
-				fw_mem[i].pa = (phys_addr_t)addr;
-				fw_mem[i].va = ioremap(fw_mem[i].pa,
-						       fw_mem[i].size);
-				if (!fw_mem[i].va)
-					pr_err("WARNING: M3 Dump addr remap failed\n");
-				break;
-
-			default:
-				pr_err("Ignore mem req type %d\n",
-				       fw_mem[i].type);
-				CNSS_ASSERT(0);
-				break;
-			}
-		}
-		return 0;
-	}
-
-	if (plat_priv->device_id == QCA8074_DEVICE_ID ||
-	    plat_priv->device_id == QCA8074V2_DEVICE_ID ||
-	    plat_priv->device_id == QCA5018_DEVICE_ID ||
-	    plat_priv->device_id == QCA6018_DEVICE_ID) {
-		if (of_property_read_u32_array(dev->of_node, "qcom,bdf-addr",
-					       bdf_location,
-					       ARRAY_SIZE(bdf_location))) {
-			pr_err("Error: No bdf_addr in device_tree\n");
-			CNSS_ASSERT(0);
-			return -ENOMEM;
-		}
-		idx = 0;
-		mode = plat_priv->tgt_mem_cfg_mode;
-		if (mode >= MAX_TGT_MEM_MODES)
-			CNSS_ASSERT(0);
-
-		for (i = 0; i < plat_priv->fw_mem_seg_len; i++) {
-			switch (fw_mem[i].type) {
-			case BDF_MEM_REGION_TYPE:
-				fw_mem[idx].pa = bdf_location[mode];
-				fw_mem[idx].va = NULL;
-				fw_mem[idx].size = fw_mem[i].size;
-				fw_mem[idx].type = fw_mem[i].type;
-				idx++;
-				break;
-			case CALDB_MEM_REGION_TYPE:
-				if (of_property_read_u32(dev->of_node,
-							 "qcom,caldb-size",
-							 &caldb_size)) {
-					pr_err("Error: No caldb-size in dts\n");
-					CNSS_ASSERT(0);
-					return -ENOMEM;
-				}
-				if (fw_mem[i].size > caldb_size) {
-					pr_err("Error: Need more memory for caldb, fw req:0x%x max:0x%x\n",
-					       (unsigned int)fw_mem[i].size,
-					       caldb_size);
-					CNSS_ASSERT(0);
-					return -ENOMEM;
-				}
-				if (!plat_priv->cold_boot_support)
-					fw_mem[idx].pa = 0;
-				else
-					fw_mem[idx].pa = caldb_location[mode];
-				fw_mem[idx].va = NULL;
-				fw_mem[idx].size = fw_mem[i].size;
-				fw_mem[idx].type = fw_mem[i].type;
-				idx++;
-				break;
-			case M3_DUMP_REGION_TYPE:
-				dev_node = of_find_node_by_name(NULL,
-								"m3_dump");
-				if (!dev_node) {
-					pr_err("%s: Unable to find m3_dump_region",
-					       __func__);
-					break;
-				}
-				if (of_address_to_resource(dev_node, 0,
-							   &m3_dump)) {
-					pr_err("%s: Unable to get m3_dump_region",
-					       __func__);
-					break;
-				}
-
-				if (!fw_mem[i].size) {
-					pr_err("FW requests size 0");
-					break;
-				}
-				if (fw_mem[i].size > resource_size(&m3_dump)) {
-					pr_err("Error: Need more memory %x\n",
-					       (unsigned int)fw_mem[idx].size);
-					CNSS_ASSERT(0);
-				}
-				fw_mem[idx].size = fw_mem[i].size;
-				fw_mem[idx].type = fw_mem[i].type;
-				fw_mem[idx].pa = m3_dump.start;
-				fw_mem[idx].va = ioremap(fw_mem[idx].pa,
-							 fw_mem[idx].size);
-				if (!fw_mem[idx].va)
-					pr_err("WARNING: M3 Dump addr remap failed\n");
-
-				idx++;
-				break;
-			default:
-				pr_err("Ignore mem req type %d\n",
-				       fw_mem[i].type);
-				break;
-			}
-		}
-		plat_priv->fw_mem_seg_len = idx;
-	}
-
-//#else
-#endif
 	struct cnss_pci_data *pci_priv = plat_priv->bus_priv;
+
 	for (i = 0; i < plat_priv->fw_mem_seg_len; i++) {
 		if (!fw_mem[i].va && fw_mem[i].size) {
 			fw_mem[i].va =
@@ -3108,7 +2901,6 @@ int cnss_pci_alloc_fw_mem(struct cnss_plat_data *plat_priv)
 			}
 		}
 	}
-//#endif
 
 	return 0;
 }
@@ -3118,57 +2910,8 @@ int cnss_pci_alloc_qdss_mem(struct cnss_pci_data *pci_priv)
 	struct cnss_plat_data *plat_priv = pci_priv->plat_priv;
 	struct cnss_fw_mem *qdss_mem = plat_priv->qdss_mem;
 	u32 i;
-
-#ifndef CONFIG_CNSS2_SMMU
-	u32 addr = 0;
-	struct device *dev = &plat_priv->plat_dev->dev;
-	
-	if (plat_priv->device_id != QCN9000_DEVICE_ID) {
-		cnss_pr_err("%s: Unknown device id 0x%lx",
-			    __func__, plat_priv->device_id);
-		return -EINVAL;
-	}
-
-	if (plat_priv->qdss_mem_seg_len > 1) {
-		cnss_pr_err("%s: FW requests %d segments, max allowed is 1",
-			    __func__, plat_priv->qdss_mem_seg_len);
-		return -EINVAL;
-	}
-
-	/* Currently we support qdss_mem_seg_len = 1 only, however, if required
-	 * this can be extended to support multiple QDSS memory segments
-	 */
-	for (i = 0; i < plat_priv->qdss_mem_seg_len; i++) {
-		switch (qdss_mem[i].type) {
-		case QDSS_ETR_MEM_REGION_TYPE:
-			if (qdss_mem[i].size > Q6_QDSS_ETR_SIZE_QCN9000) {
-				cnss_pr_err("%s: FW requests more memory 0x%zx\n",
-					    __func__, qdss_mem[i].size);
-				return -ENOMEM;
-			}
-			if (of_property_read_u32(dev->of_node, "etr-addr",
-						 &addr)) {
-				cnss_pr_err("Error: No etr-addr in dts\n");
-				CNSS_ASSERT(0);
-				return -ENOMEM;
-			}
-
-			qdss_mem[i].pa = (phys_addr_t)addr;
-			qdss_mem[i].va = ioremap(qdss_mem[i].pa,
-						 qdss_mem[i].size);
-			if (!qdss_mem[i].va) {
-				cnss_pr_err("WARNING etr-addr remap failed\n");
-				return -ENOMEM;
-			}
-			break;
-		default:
-			cnss_pr_err("%s: Unknown type %d\n",
-				    __func__, qdss_mem[i].type);
-			break;
-		}
-	}
-#else
 	u32 j;
+
 	for (i = 0; i < plat_priv->qdss_mem_seg_len; i++) {
 		if (!qdss_mem[i].va && qdss_mem[i].size) {
 			qdss_mem[i].va =
@@ -3193,7 +2936,7 @@ int cnss_pci_alloc_qdss_mem(struct cnss_pci_data *pci_priv)
 		}
 		plat_priv->qdss_mem_seg_len = i;
 	}
-#endif
+
 	cnss_pr_dbg("%s: seg_len %d, type %d, size 0x%zx, pa: 0x%pa, va: 0x%p",
 		    __func__, plat_priv->qdss_mem_seg_len, qdss_mem[0].type,
 		    qdss_mem[0].size, &qdss_mem[0].pa, qdss_mem[0].va);
@@ -3205,8 +2948,6 @@ void cnss_pci_free_qdss_mem(struct cnss_plat_data *plat_priv)
 {
 	struct cnss_fw_mem *qdss_mem = plat_priv->qdss_mem;
 	int i;
-
-#ifdef CONFIG_CNSS2_SMMU
 	struct cnss_pci_data *pci_priv =
 			(struct cnss_pci_data *)plat_priv->bus_priv;
 
@@ -3224,16 +2965,7 @@ void cnss_pci_free_qdss_mem(struct cnss_plat_data *plat_priv)
 			qdss_mem[i].type = 0;
 		}
 	}
-#else
-	for (i = 0; i < plat_priv->qdss_mem_seg_len; i++) {
-		if (qdss_mem[i].va) {
-			cnss_pr_dbg("Freeing QDSS Memory\n");
-			iounmap(qdss_mem[i].va);
-			qdss_mem[i].va = NULL;
-			qdss_mem[i].size = 0;
-		}
-	}
-#endif
+
 	plat_priv->qdss_mem_seg_len = 0;
 }
 
@@ -3241,8 +2973,6 @@ void cnss_pci_free_fw_mem(struct cnss_plat_data *plat_priv)
 {
 	struct cnss_fw_mem *fw_mem = plat_priv->fw_mem;
 	int i;
-
-#ifdef CONFIG_CNSS2_SMMU
 	struct cnss_pci_data *pci_priv =
 			(struct cnss_pci_data *)plat_priv->bus_priv;
 
@@ -3260,17 +2990,7 @@ void cnss_pci_free_fw_mem(struct cnss_plat_data *plat_priv)
 			fw_mem[i].type = 0;
 		}
 	}
-#else
-	for (i = 0; i < plat_priv->fw_mem_seg_len; i++) {
-		if (fw_mem[i].va) {
-			cnss_pr_dbg("Freeing FW mem of type %d\n",
-				    fw_mem[i].type);
-			iounmap(fw_mem[i].va);
-			fw_mem[i].va = NULL;
-			fw_mem[i].size = 0;
-		}
-	}
-#endif
+
 	plat_priv->fw_mem_seg_len = 0;
 }
 
@@ -3380,14 +3100,13 @@ void cnss_pci_free_m3_mem(struct cnss_plat_data *plat_priv)
 			    m3_mem->va, &m3_mem->pa, SZ_512K);
 	}
 
-#ifdef CONFIG_CNSS2_SMMU
 	if (m3_mem->va && m3_mem->size) {
 		cnss_pr_dbg("Freeing memory for M3, va: 0x%pK, pa: %pa, size: 0x%zx\n",
 			    m3_mem->va, &m3_mem->pa, m3_mem->size);
 		dma_free_attrs(&pci_dev->dev, m3_mem->size,
 			       m3_mem->va, m3_mem->pa, 0);
 	}
-#endif
+
 	m3_mem->va = NULL;
 	m3_mem->pa = 0;
 	m3_mem->size = 0;
