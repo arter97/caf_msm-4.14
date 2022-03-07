@@ -278,6 +278,7 @@
 		qcom,bark-time = <11000>;
 		qcom,pet-time = <9360>;
 		qcom,wakeup-enable;
+		qcom,userspace-watchdog;
 	};
 
 	qcom,msm-rtb {
