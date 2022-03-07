@@ -1,4 +1,5 @@
 /* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -43,16 +44,22 @@
 #define AIS_VFE_MASK0_RDI 0x780001E0
 #define AIS_VFE_MASK1_RDI 0x000000BC
 
+#define AIS_VFE_MASK1_RDI_OVERFLOW_SHT 2
+
 #define AIS_VFE_STATUS0_BUS_WR_IRQ  (1 << 9)
 #define AIS_VFE_STATUS0_RDI_SOF_IRQ  (0xF << AIS_VFE_STATUS0_RDI_SOF_IRQ_SHFT)
 #define AIS_VFE_STATUS0_RDI_OVERFLOW_IRQ  \
 	(0xF << AIS_VFE_STATUS1_RDI_OVERFLOW_IRQ_SHFT)
 #define AIS_VFE_STATUS0_RESET_ACK_IRQ  (1 << 31)
+#define AIS_VFE_GLOBAL_RESET_CMD_RDI_0_RESET_SHFT (10)
 
 #define AIS_VFE_REGUP_RDI_SHIFT 1
 #define AIS_VFE_REGUP_RDI_ALL 0x1E
 
 /*VFE BUS DEFINITIONS*/
+#define AIS_VFE_BUS_STATUS0_ERROR_MASK AIS_VFE_BUS_STATUS0_VIOLATION
+#define AIS_VFE_BUS_STATUS0_VIOLATION  (1 << 14)
+
 #define MAX_NUM_BUF_HW_FIFOQ 4
 
 #define AIS_VFE_BUS_SET_DEBUG_REG                0x82
@@ -139,7 +146,7 @@ static int ais_vfe_bus_hw_deinit(struct ais_vfe_hw_core_info *core_info)
 	/*set IRQ mask for BUS WR*/
 	core_info->irq_mask0 &= ~AIS_VFE_STATUS0_BUS_WR_IRQ;
 
-	cam_io_w_mb(0x7800,
+	cam_io_w_mb(AIS_VFE_BUS_STATUS0_ERROR_MASK,
 		core_info->mem_base + bus_hw_irq_regs[0].mask_reg_offset);
 	cam_io_w_mb(0x0,
 		core_info->mem_base + bus_hw_irq_regs[1].mask_reg_offset);
@@ -239,6 +246,49 @@ static int ais_vfe_reset(void *hw_priv,
 
 	CAM_DBG(CAM_ISP, "Exit");
 	return rc;
+}
+
+static void ais_vfe_reset_rdi(void *hw_priv,
+	enum ais_ife_output_path_id path)
+{
+	struct cam_hw_info *vfe_hw  = hw_priv;
+	struct ais_vfe_top_ver2_hw_info *top_hw_info = NULL;
+	struct ais_vfe_hw_core_info *core_info = NULL;
+	uint32_t  reset_reg_val = 0;
+	int rc = 0;
+
+	core_info = (struct ais_vfe_hw_core_info *)vfe_hw->core_info;
+	top_hw_info = core_info->vfe_hw_info->top_hw_info;
+
+	cam_io_w_mb(AIS_VFE_STATUS0_RESET_ACK_IRQ,
+		core_info->mem_base + AIS_VFE_IRQ_MASK0);
+
+	reinit_completion(&vfe_hw->hw_complete);
+
+	reset_reg_val = 1 << (AIS_VFE_GLOBAL_RESET_CMD_RDI_0_RESET_SHFT + path);
+
+	/* Reset HW */
+	cam_io_w_mb(reset_reg_val,
+		core_info->mem_base +
+		top_hw_info->common_reg->global_reset_cmd);
+
+	CAM_DBG(CAM_ISP, "waiting for vfe reset complete");
+
+	/* Wait for Completion or Timeout of 500ms */
+	rc = wait_for_completion_timeout(&vfe_hw->hw_complete,
+					msecs_to_jiffies(500));
+
+	CAM_INFO(CAM_ISP, "reset IFE%d RDI%d complete done (%d)",
+		core_info->vfe_idx, path, rc);
+
+	if (rc)
+		rc = 0;
+	else
+		CAM_ERR(CAM_ISP, "Error! Reset Timeout");
+
+	core_info->irq_mask0 = 0x0;
+	cam_io_w_mb(0x0, core_info->mem_base + AIS_VFE_IRQ_MASK0);
+
 }
 
 int ais_vfe_init_hw(void *hw_priv, void *init_hw_args, uint32_t arg_size)
@@ -621,8 +671,6 @@ int ais_vfe_stop(void *hw_priv, void *stop_args, uint32_t arg_size)
 		goto EXIT;
 	}
 
-	rdi_path->state = AIS_ISP_RESOURCE_STATE_INIT_HW;
-
 	core_info->bus_wr_mask1 &= ~(1 << stop_cmd->path);
 	cam_io_w_mb(core_info->bus_wr_mask1,
 		core_info->mem_base + bus_hw_irq_regs[1].mask_reg_offset);
@@ -646,7 +694,19 @@ int ais_vfe_stop(void *hw_priv, void *stop_args, uint32_t arg_size)
 	else
 		CAM_WARN(CAM_ISP, "Reset Bus WR timeout");
 
+	/*
+	 * For now just when ERROR state do reset_rdi to
+	 * clear IFE overflow error.
+	 * TBD: If INIT/AVAILABLE state do reset_rdi,
+	 * in multi-stream start/stop test lead frame
+	 * freeze, need to check further why freeze.
+	 */
+	if (rdi_path->state == AIS_ISP_RESOURCE_STATE_ERROR)
+		ais_vfe_reset_rdi(vfe_hw, stop_cmd->path);
+
 	ais_clear_rdi_path(rdi_path);
+
+	rdi_path->state = AIS_ISP_RESOURCE_STATE_INIT_HW;
 
 EXIT:
 	mutex_unlock(&vfe_hw->hw_mutex);
@@ -877,13 +937,19 @@ static int ais_vfe_handle_error(
 			continue;
 
 		p_rdi = &core_info->rdi_out[path];
-		CAM_ERR(CAM_ISP, "IFE%d p_rdi->state = %d", p_rdi->state);
+		CAM_ERR(CAM_ISP, "IFE%d p_rdi->state = %d",  core_info->vfe_idx,  p_rdi->state);
 
 		if (p_rdi->state == AIS_ISP_RESOURCE_STATE_STREAMING)
 		{
 			p_rdi->state = AIS_ISP_RESOURCE_STATE_ERROR;
 
 			client_regs = &bus_hw_info->bus_client_reg[path];
+
+			/* Disable rdi* overflow irq mask*/
+			core_info->irq_mask1 &=
+				~(1 << (AIS_VFE_MASK1_RDI_OVERFLOW_SHT + path));
+			cam_io_w_mb(core_info->irq_mask1,
+				core_info->mem_base + AIS_VFE_IRQ_MASK1);
 
 			/* Disable WM and reg-update */
 			cam_io_w_mb(0x0, core_info->mem_base + client_regs->cfg);
@@ -1067,10 +1133,10 @@ static int ais_vfe_handle_bus_wr_irq(struct cam_hw_info *vfe_hw,
 	if (work_data->bus_wr_status[1])
 		ais_vfe_bus_handle_frame_done(core_info, work_data);
 
-	if (work_data->bus_wr_status[0] & 0x7800) {
-		CAM_ERR(CAM_ISP, "VFE%d: WR BUS error occurred status = 0x%x",
+	if (work_data->bus_wr_status[0] & AIS_VFE_BUS_STATUS0_VIOLATION) {
+		CAM_ERR(CAM_ISP, "VFE%d: WR BUS violation status = 0x%x",
 			core_info->vfe_idx, work_data->bus_wr_status[0]);
-		work_data->path = (work_data->bus_wr_status[0] >> 11) & 0xF;
+		work_data->path = 0xF;
 		rc = ais_vfe_handle_error(core_info, work_data);
 	}
 
