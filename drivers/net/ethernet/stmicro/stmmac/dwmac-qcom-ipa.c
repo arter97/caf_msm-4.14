@@ -2098,6 +2098,9 @@ static int ethqos_disable_ipa_offload(struct qcom_ethqos *ethqos)
 static int ethqos_enable_ipa_offload(struct qcom_ethqos *ethqos)
 {
 	int ret = 0;
+	struct platform_device *pdev = ethqos->pdev;
+	struct net_device *dev = platform_get_drvdata(pdev);
+	struct stmmac_priv *priv = netdev_priv(dev);
 
 	if (!eth_ipa_ctx.ipa_offload_init) {
 		ret = ethqos_ipa_offload_init(ethqos);
@@ -2127,7 +2130,11 @@ static int ethqos_enable_ipa_offload(struct qcom_ethqos *ethqos)
 			goto fail;
 		}
 	}
-
+	if(eth_ipa_ctx.ipa_offload_susp) {
+		/* Map RX queue 0 to DMA channel 1 if IPA offload is suspended */
+		priv->hw->mac->map_mtl_to_dma(priv->hw, EMAC_QUEUE_0, EMAC_CHANNEL_1);
+		ETHQOSINFO("Mapped queue 0 to channel 1\n");
+	}
 	if (!eth_ipa_ctx.ipa_debugfs_exists) {
 		if (!ethqos_ipa_create_debugfs(ethqos)) {
 			ETHQOSDBG("eMAC Debugfs created\n");
