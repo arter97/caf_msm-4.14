@@ -80,6 +80,7 @@
 	snps,mtl-tx-config = <&mtl_tx_setup>;
 	mac2mac;
 	mac2mac-rgmii-speed = <1000>;
+	wait_for_emac_rx_clk;
 };
 
 &spi_1 {
