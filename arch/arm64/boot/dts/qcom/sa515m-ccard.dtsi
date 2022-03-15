@@ -272,6 +272,9 @@
 	pinctrl-1 = <&emac_pin_pps_0>;
 	pinctrl-2 = <&emac_pin_pps_1>;
 	qcom,phy-reset-delay-msecs = <10>;
+	rgmii-tx-drv-str-clk = <16>;
+	rgmii-tx-drv-str-data = <16>;
+	rgmii-tx-drv-str-ctl = <16>;
 	ipa-dma-rx-desc-cnt = <512>;
 	ipa-dma-tx-desc-cnt = <512>;
 };
