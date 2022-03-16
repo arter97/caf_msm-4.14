@@ -2113,7 +2113,7 @@ static int dwmac_qcom_handle_mac_err(void *pdata, int type, int chan)
 	ethqos->mac_err_cnt[type]++;
 
 	if (ethqos->mac_rec_en[type]) {
-		if (ethqos->mac_rec_cnt[type] >
+		if (ethqos->mac_rec_cnt[type] >=
 		    ethqos->mac_rec_threshold[type]) {
 			ETHQOSERR("exceeded recovery threshold for %s",
 				  err_names[type]);
@@ -2389,7 +2389,7 @@ static int ethqos_create_debugfs(struct qcom_ethqos        *ethqos)
 	struct stmmac_priv *priv;
 
 	if (!ethqos) {
-		ETHQOSERR("Null Param %s\n", __func__);
+		ETHQOSERR("Null Param\n");
 		return -ENOMEM;
 	}
 
