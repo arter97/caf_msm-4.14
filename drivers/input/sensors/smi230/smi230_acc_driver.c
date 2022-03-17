@@ -82,12 +82,14 @@ struct smi_acc_sample {
 };
 #endif
 
+static bool is_accel_ready = false;
 struct smi230_client_data {
 	struct device *dev;
 	struct input_dev *input;
 	int IRQ;
 	uint8_t gpio_pin;
 	uint64_t timestamp;
+	uint64_t timestamp_old;
 	struct mutex acc_temp_read;
 #ifdef CONFIG_ENABLE_SMI230_ACC_GYRO_BUFFERING
 	bool read_acc_boot_sample;
@@ -133,6 +135,16 @@ static void smi230_check_acc_enable_flag(struct smi230_client_data *client_data,
 
 }
 #endif
+uint64_t smi230_acc_get_alarm_timestamp(void)
+{
+        uint64_t ts_ap;
+        struct timespec tmp_time;
+
+        get_monotonic_boottime(&tmp_time);
+        ts_ap = (uint64_t)tmp_time.tv_sec * 1000000000 + tmp_time.tv_nsec;
+        return ts_ap;
+}
+
 static ssize_t smi230_acc_reg_dump(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -222,26 +234,31 @@ static ssize_t smi230_acc_store_acc_pwr_cfg(struct device *dev,
 	int err = 0;
 	unsigned long pwr_cfg;
 
-<<<<<<< HEAD
 	struct smi230_client_data *client_data = dev_get_drvdata(dev);
 
-	err = kstrtoul(buf, 10, &pw_cfg);
+	err = kstrtoul(buf, 10, &pwr_cfg);
 	if (err)
 		return err;
 
-	smi230_check_acc_enable_flag(client_data, pw_cfg);
+	smi230_check_acc_enable_flag(client_data, pwr_cfg);
 
 	err = smi230_check_acc_early_buff_enable_flag(client_data);
 	if (err)
 		return count;
 
-	if (pw_cfg == 3) {
+	err = kstrtoul(buf, 10, &pwr_cfg);
+	if (err)
+		return err;
+	if (pwr_cfg == 3) {
 		p_smi230_dev->accel_cfg.power = SMI230_ACCEL_PM_SUSPEND;
 		err = smi230_acc_set_power_mode(p_smi230_dev);
 	}
 	else if (pwr_cfg == 0) {
+		is_accel_ready = false;
+		err |= smi230_acc_fifo_reset(p_smi230_dev);
 		p_smi230_dev->accel_cfg.power = SMI230_ACCEL_PM_ACTIVE;
 		err = smi230_acc_set_power_mode(p_smi230_dev);
+		client_data->timestamp_old = smi230_acc_get_alarm_timestamp();
 	}
 
 	PDEBUG("set power cfg to %ld, err %d", pwr_cfg, err);
@@ -308,6 +325,8 @@ static ssize_t smi230_acc_show_sync_data(struct device *dev,
 			gyro_data.x, gyro_data.y, gyro_data.z
 			);
 }
+#endif
+
 #ifdef CONFIG_ENABLE_SMI230_ACC_GYRO_BUFFERING
 static int smi_acc_read_bootsampl(struct smi230_client_data *client_data,
 		unsigned long enable_read)
@@ -391,6 +410,7 @@ static ssize_t read_acc_boot_sample_store(struct device *dev,
 }
 #endif
 
+#ifdef CONFIG_SMI230_DATA_SYNC
 static ssize_t smi230_acc_store_datasync_odr(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -776,11 +796,11 @@ static int smi230_input_init(struct smi230_client_data *client_data)
 	return err;
 }
 
-<<<<<<< HEAD
 #ifdef CONFIG_ENABLE_SMI230_ACC_GYRO_BUFFERING
 static void store_acc_boot_sample(struct smi230_client_data *client_data,
 		int x, int y, int z, struct timespec ts)
 {
+	int err = 0;
 	if (false == client_data->acc_buffer_smi230_samples)
 		return;
 	mutex_lock(&client_data->acc_sensor_buff);
@@ -805,7 +825,10 @@ static void store_acc_boot_sample(struct smi230_client_data *client_data,
 		if (client_data->acc_enable == false) {
 			/*set accel power mode */
 			p_smi230_dev->accel_cfg.power = SMI230_ACCEL_PM_SUSPEND;
-			smi230_acc_set_power_mode(p_smi230_dev);
+			err |= smi230_acc_set_power_mode(p_smi230_dev);
+			if (err != SMI230_OK) {
+				PERR("set power mode failed");
+			}
 		}
 	}
 	mutex_unlock(&client_data->acc_sensor_buff);
@@ -877,9 +900,19 @@ static int smi230_acc_early_buff_init(struct smi230_client_data *client_data)
 
 	mutex_init(&client_data->acc_sensor_buff);
 
-	/*set accel power mode */
+        p_smi230_dev->accel_cfg.odr = SMI230_ACCEL_ODR_100_HZ;
+        p_smi230_dev->accel_cfg.bw = SMI230_ACCEL_BW_NORMAL;
+        p_smi230_dev->accel_cfg.range = SMI230_ACCEL_RANGE_2G;
+
+        err |= smi230_acc_set_meas_conf(p_smi230_dev);
+        smi230_delay(100);
+
+	err |= smi230_acc_fifo_reset(p_smi230_dev);
+
+	is_accel_ready = false;
 	p_smi230_dev->accel_cfg.power = SMI230_ACCEL_PM_ACTIVE;
 	smi230_acc_set_power_mode(p_smi230_dev);
+	client_data->timestamp_old = smi230_acc_get_alarm_timestamp();
 
 	return 1;
 
@@ -977,7 +1010,10 @@ static void smi230_acc_fifo_handle(
 {
 	struct smi230_fifo_frame fifo;
 	int err = 0, i;
-	uint16_t fifo_length;
+	uint16_t fifo_length, step = 1;
+	struct timespec ts;
+	uint64_t data_ts = 0;
+	
 
 	err = smi230_acc_get_fifo_length(&fifo.length, p_smi230_dev);
 	if (err != SMI230_OK) {
@@ -1023,13 +1059,26 @@ static void smi230_acc_fifo_handle(
                             &fifo_length,
                             &fifo,
                             p_smi230_dev);
-
-	for (i = 0; i < fifo_length; i++) {
-		input_event(client_data->input, EV_ABS, ABS_X, (int)fifo_accel_data[i].x);
-		input_event(client_data->input, EV_ABS, ABS_Y, (int)fifo_accel_data[i].y);
-		input_event(client_data->input, EV_ABS, ABS_Z, (int)fifo_accel_data[i].z);
-		input_sync(client_data->input);
+	if (is_accel_ready == false) {
+		client_data->timestamp_old = client_data->timestamp;
+		is_accel_ready = true;
+		return;
 	}
+	for (i = 0; i < fifo_length; i++) {
+		data_ts = client_data->timestamp_old +
+			step * div_s64((client_data->timestamp - client_data->timestamp_old) , fifo_length);
+		step++;
+		ts = ns_to_timespec(data_ts);
+		input_event(client_data->input, EV_MSC, MSC_TIMESTAMP, ts.tv_sec);
+		input_event(client_data->input, EV_MSC, MSC_TIMESTAMP, ts.tv_nsec);
+		input_event(client_data->input, EV_MSC, MSC_GESTURE, (int)fifo_accel_data[i].x);
+		input_event(client_data->input, EV_MSC, MSC_GESTURE, (int)fifo_accel_data[i].y);
+		input_event(client_data->input, EV_MSC, MSC_GESTURE, (int)fifo_accel_data[i].z);
+		input_sync(client_data->input);
+		store_acc_boot_sample(client_data, fifo_accel_data[i].x,
+				fifo_accel_data[i].y, fifo_accel_data[i].z, ts);
+	}
+	client_data->timestamp_old = client_data->timestamp;
 }
 
 #else /* new data */
@@ -1051,16 +1100,6 @@ static void smi230_new_data_ready_handle(
 	input_sync(client_data->input);
 }
 #endif
-
-uint64_t smi230_acc_get_alarm_timestamp(void)
-{
-	uint64_t ts_ap;
-	struct timespec tmp_time;
-
-	get_monotonic_boottime(&tmp_time);
-	ts_ap = (uint64_t)tmp_time.tv_sec * 1000000000 + tmp_time.tv_nsec;
-	return ts_ap;
-}
 
 static irqreturn_t smi230_irq_work_func(int irq, void *handle)
 {
@@ -1087,7 +1126,6 @@ static irqreturn_t smi230_irq_work_func(int irq, void *handle)
 static irqreturn_t smi230_irq_handle(int irq, void *handle)
 {
 	struct smi230_client_data *client_data = handle;
-	int err = 0;
 
 	client_data->timestamp = smi230_acc_get_alarm_timestamp();
 
@@ -1209,7 +1247,7 @@ int smi230_acc_probe(struct device *dev, struct smi230_dev *smi230_dev)
 
 	p_smi230_dev->accel_cfg.odr = SMI230_ACCEL_ODR_100_HZ;
 	p_smi230_dev->accel_cfg.bw = SMI230_ACCEL_BW_NORMAL;
-	p_smi230_dev->accel_cfg.range = SMI230_ACCEL_RANGE_4G;
+	p_smi230_dev->accel_cfg.range = SMI230_ACCEL_RANGE_2G;
 
         err |= smi230_acc_set_meas_conf(p_smi230_dev);
 	smi230_delay(100);
@@ -1229,7 +1267,7 @@ int smi230_acc_probe(struct device *dev, struct smi230_dev *smi230_dev)
 	int_config.accel_int_config_1.int_type = SMI230_FIFO_WM_INT;
 	int_config.accel_int_config_2.int_type = SMI230_FIFO_WM_INT;
 
-	err |= smi230_acc_set_fifo_wm(91, p_smi230_dev);
+	err |= smi230_acc_set_fifo_wm(70, p_smi230_dev);
 #endif
 #ifdef CONFIG_SMI230_ACC_FIFO_FULL
 	PINFO("ACC FIFO full is enabled");
