@@ -660,6 +660,9 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&usb1_vbus_on>;
 	pinctrl-1 = <&usb1_vbus_off>;
+	dwc3@a800000 {
+		dr_mode = "host";
+	};
 };
 
 &L14A {
