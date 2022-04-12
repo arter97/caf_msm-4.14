@@ -38,7 +38,7 @@ static dev_t ramdump_dev;
 static DEFINE_MUTEX(rd_minor_mutex);
 static DEFINE_IDA(rd_minor_id);
 static bool ramdump_devnode_inited;
-#define RAMDUMP_WAIT_MSECS	120000
+#define RAMDUMP_WAIT_MSECS	250000
 #define MAX_STRTBL_SIZE 512
 #define MAX_NAME_LENGTH 16
 
