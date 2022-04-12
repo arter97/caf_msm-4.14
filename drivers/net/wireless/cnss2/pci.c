@@ -58,6 +58,7 @@
 
 #define FW_ASSERT_TIMEOUT		5000
 #define DEV_RDDM_TIMEOUT		5000
+#define WAKE_EVENT_TIMEOUT		5000
 
 #ifdef CONFIG_CNSS_EMULATION
 #define EMULATION_HW			1
@@ -515,6 +516,45 @@ int cnss_resume_pci_link(struct cnss_pci_data *pci_priv)
 	return 0;
 out:
 	return ret;
+}
+
+int cnss_pci_recover_link_down(struct cnss_pci_data *pci_priv)
+{
+	int ret;
+
+	switch (pci_priv->device_id) {
+	case QCA6390_DEVICE_ID:
+	case QCA6490_DEVICE_ID:
+	case QCN7605_DEVICE_ID:
+		break;
+	default:
+		return -EOPNOTSUPP;
+	}
+
+	/* Always wait here to avoid missing WAKE assert for RDDM
+	 * before link recovery
+	 */
+	msleep(WAKE_EVENT_TIMEOUT);
+
+	/* Always do PCIe L2 suspend/resume during link down recovery */
+	pci_priv->drv_connected_last = 0;
+	ret = cnss_suspend_pci_link(pci_priv);
+	if (ret)
+		cnss_pr_err("Failed to suspend PCI link, err = %d\n", ret);
+
+	ret = cnss_resume_pci_link(pci_priv);
+	if (ret) {
+		cnss_pr_err("Failed to resume PCI link, err = %d\n", ret);
+		del_timer(&pci_priv->dev_rddm_timer);
+		return ret;
+	}
+
+	mod_timer(&pci_priv->dev_rddm_timer,
+		  jiffies + msecs_to_jiffies(DEV_RDDM_TIMEOUT));
+
+	mhi_debug_reg_dump(pci_priv->mhi_ctrl);
+
+	return 0;
 }
 
 int cnss_pci_prevent_l1(struct device *dev)
