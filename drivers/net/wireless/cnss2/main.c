@@ -643,6 +643,8 @@ static char *cnss_driver_event_to_str(enum cnss_driver_event_type type)
 		return "QDSS_TRACE_SAVE";
 	case CNSS_DRIVER_EVENT_QDSS_TRACE_FREE:
 		return "QDSS_TRACE_FREE";
+	case CNSS_DRIVER_EVENT_RECOVERY_AGAIN:
+		return "RECOVERY_AGAIN";
 	case CNSS_DRIVER_EVENT_MAX:
 		return "EVENT_MAX";
 	}
@@ -1240,6 +1242,28 @@ int cnss_self_recovery(struct device *dev,
 }
 EXPORT_SYMBOL(cnss_self_recovery);
 
+static int cnss_recovery_again(struct cnss_plat_data *plat_priv, void *data)
+{
+	int ret;
+
+	if (test_bit(CNSS_DRIVER_RECOVERY, &plat_priv->driver_state)) {
+		cnss_pr_err("Waiting previous recovery finished\n");
+		reinit_completion(&plat_priv->recovery_complete);
+		ret = wait_for_completion_timeout(&plat_priv->recovery_complete,
+						  RECOVERY_TIMEOUT);
+		if (!ret) {
+			cnss_pr_err("Timeout waiting for pre recovery to complete\n");
+			CNSS_ASSERT(0);
+			return ret;
+		}
+	}
+
+	cnss_bus_update_status(plat_priv, CNSS_FW_DOWN);
+
+	cnss_pr_dbg("call recovery handle\n");
+	return cnss_driver_recovery_hdlr(plat_priv, data);
+}
+
 void cnss_schedule_recovery(struct device *dev,
 			    enum cnss_recovery_reason reason)
 {
@@ -1656,6 +1680,9 @@ static void cnss_driver_event_work(struct work_struct *work)
 			break;
 		case CNSS_DRIVER_EVENT_QDSS_TRACE_FREE:
 			ret = cnss_qdss_trace_free_hdlr(plat_priv);
+			break;
+		case CNSS_DRIVER_EVENT_RECOVERY_AGAIN:
+			ret = cnss_recovery_again(plat_priv, event->data);
 			break;
 		default:
 			cnss_pr_err("Invalid driver event type: %d",

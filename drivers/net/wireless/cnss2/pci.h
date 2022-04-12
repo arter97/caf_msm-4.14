@@ -65,6 +65,7 @@ struct cnss_pci_data {
 	struct cnss_wlan_driver *driver_ops;
 	bool pci_link_state;
 	bool pci_link_down_ind;
+	u32 pci_link_down_count;
 	struct pci_saved_state *saved_state;
 	struct pci_saved_state *default_state;
 	struct msm_pcie_register_event msm_pci_event;
