@@ -4353,9 +4353,6 @@ void cnss_pci_remove(struct pci_dev *pci_dev)
 		return;
 	}
 
-	cnss_bus_free_fw_mem(plat_priv);
-	cnss_bus_free_qdss_mem(plat_priv);
-
 	switch (pci_dev->device) {
 	case QCN9000_EMULATION_DEVICE_ID:
 	case QCN9000_DEVICE_ID:

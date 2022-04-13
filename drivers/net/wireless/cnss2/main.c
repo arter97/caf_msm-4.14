@@ -3772,6 +3772,9 @@ static int cnss_remove(struct platform_device *plat_dev)
 {
 	struct cnss_plat_data *plat_priv = platform_get_drvdata(plat_dev);
 
+	cnss_bus_free_fw_mem(plat_priv);
+	cnss_bus_free_qdss_mem(plat_priv);
+
 	cnss_genl_exit();
 #if defined(CNSS2_COEX) || defined(CNSS2_IMS)
 	cnss_unregister_ims_service(plat_priv);
