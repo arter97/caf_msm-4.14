@@ -1,4 +1,5 @@
 /* Copyright (c) 2010-2018, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -3476,12 +3477,6 @@ static irqreturn_t hdmi_tx_isr(int irq, void *data)
 			DSS_REG_W(io, HDMI_HPD_INT_CTRL, reg_val);
 			goto end;
 		}
-
-		/*
-		 * Ack the current hpd interrupt and stop listening to
-		 * new hpd interrupt.
-		 */
-		DSS_REG_W(io, HDMI_HPD_INT_CTRL, BIT(0));
 
 		queue_work(hdmi_ctrl->workq, &hdmi_ctrl->hpd_int_work);
 	}
