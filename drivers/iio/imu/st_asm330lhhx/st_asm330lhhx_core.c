@@ -57,12 +57,13 @@ static struct st_asm330lhhx_selftest_table {
 };
 
 static struct st_asm330lhhx_suspend_resume_entry
-	st_asm330lhhx_suspend_resume[ST_ASM330LHHX_SUSPEND_RESUME_REGS] = {
-	[ST_ASM330LHHX_CTRL1_XL_REG] = {
-		.page = FUNC_CFG_ACCESS_0,
-		.addr = ST_ASM330LHHX_CTRL1_XL_ADDR,
-		.mask = GENMASK(3, 2),
-	},
+	st_asm330lhhx_suspend_resume[ST_ASM330LHHX_SUSPEND_RESUME_REGS] =
+{
+	//[ST_ASM330LHHX_CTRL1_XL_REG] = {
+		//.page = FUNC_CFG_ACCESS_0,
+		//.addr = ST_ASM330LHHX_CTRL1_XL_ADDR,
+		//.mask = GENMASK(3, 2),
+	//},
 	[ST_ASM330LHHX_CTRL2_G_REG] = {
 		.page = FUNC_CFG_ACCESS_0,
 		.addr = ST_ASM330LHHX_CTRL2_G_ADDR,
@@ -85,11 +86,11 @@ static struct st_asm330lhhx_suspend_resume_entry
 		.addr = ST_ASM330LHHX_REG_CTRL5_C_ADDR,
 		.mask = ST_ASM330LHHX_REG_ROUNDING_MASK,
 	},
-	[ST_ASM330LHHX_REG_CTRL6_C_REG] = {
-		.page = FUNC_CFG_ACCESS_0,
-		.addr = ST_ASM330LHHX_REG_CTRL6_C_ADDR,
-		.mask = ST_ASM330LHHX_REG_XL_HM_MODE_MASK,
-	},
+	//[ST_ASM330LHHX_REG_CTRL6_C_REG] = {
+		//.page = FUNC_CFG_ACCESS_0,
+		//.addr = ST_ASM330LHHX_REG_CTRL6_C_ADDR,
+		//.mask = ST_ASM330LHHX_REG_XL_HM_MODE_MASK,
+	//},
 	[ST_ASM330LHHX_REG_CTRL10_C_REG] = {
 		.page = FUNC_CFG_ACCESS_0,
 		.addr = ST_ASM330LHHX_REG_CTRL10_C_ADDR,
@@ -2485,6 +2486,17 @@ __maybe_unused _st_asm330lhhx_suspend(struct st_asm330lhhx_hw *hw)
 		if (err < 0)
 			return err;
 
+		/* disable FIFO batch for gyro */
+		err = st_asm330lhhx_update_bits_locked(hw,
+			hw->odr_table_entry[ST_ASM330LHHX_ID_GYRO].batching_reg.addr,
+			hw->odr_table_entry[ST_ASM330LHHX_ID_GYRO].batching_reg.mask,
+			0);
+		if (err < 0)
+			return err;
+
+		/* setting state to resuming */
+		hw->resuming = true;
+
 		/* set FIFO watermark to max level */
 		sensor_acc = iio_priv(hw->iio_devs[id_acc]);
 		hw->suspend_fifo_watermark = hw->fifo_watermark;
@@ -2497,9 +2509,6 @@ __maybe_unused _st_asm330lhhx_suspend(struct st_asm330lhhx_hw *hw)
 		err = st_asm330lhhx_set_fifo_mode(hw, ST_ASM330LHHX_FIFO_CONT);
 		if (err < 0)
 			return err;
-
-		/* setting state to resuming */
-		hw->resuming = true;
 
 		dump_registers("suspend", hw);
 
@@ -2570,10 +2579,6 @@ __maybe_unused _st_asm330lhhx_resume(struct st_asm330lhhx_hw *hw)
 
 	mutex_unlock(&hw->handler_lock);
 
-	err = st_asm330lhhx_restore_regs(hw);
-	if (err < 0)
-		return err;
-
 	for (i = 0; i <= ST_ASM330LHHX_ID_EXT1; i++) {
 		sensor = iio_priv(hw->iio_devs[i]);
 		if (!hw->iio_devs[i])
@@ -2587,6 +2592,10 @@ __maybe_unused _st_asm330lhhx_resume(struct st_asm330lhhx_hw *hw)
 		if (err < 0)
 			return err;
 	}
+
+	err = st_asm330lhhx_restore_regs(hw);
+	if (err < 0)
+		return err;
 
 	/* FIFO still configured */
 	if (st_asm330lhhx_is_fifo_enabled(hw)) {
