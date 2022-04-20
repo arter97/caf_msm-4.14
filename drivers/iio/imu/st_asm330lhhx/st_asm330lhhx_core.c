@@ -1927,14 +1927,14 @@ static int st_asm330lhhx_reset_device(struct st_asm330lhhx_hw *hw)
 	if (err < 0)
 		return err;
 
-	msleep(50);
+	usleep_range(10500, 11000);
 
 	/* boot */
 	err = regmap_update_bits(hw->regmap, ST_ASM330LHHX_REG_CTRL3_C_ADDR,
 				 ST_ASM330LHHX_REG_BOOT_MASK,
 				 FIELD_PREP(ST_ASM330LHHX_REG_BOOT_MASK, 1));
 
-	msleep(50);
+	usleep_range(20, 30);
 
 	return err;
 }
@@ -2356,9 +2356,12 @@ int st_asm330lhhx_probe(struct device *dev, int irq,
 			return -ENOMEM;
 	}
 
-	err = st_asm330lhhx_shub_probe(hw);
-	if (err < 0)
-		return err;
+	if ((!dev_fwnode(dev) ||
+	     !device_property_read_bool(dev, "st,disable-sensor-hub"))) {
+		err = st_asm330lhhx_shub_probe(hw);
+		if (err < 0)
+			return err;
+	}
 
 	if (hw->irq > 0) {
 		err = st_asm330lhhx_buffers_setup(hw);
