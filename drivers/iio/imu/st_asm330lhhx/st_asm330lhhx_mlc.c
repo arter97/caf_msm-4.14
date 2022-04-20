@@ -410,9 +410,12 @@ static int st_asm330lhhx_program_mlc(const struct firmware *fw,
 	u16 odr = 0;
 	char str[UCF_STR_LEN];
 	unsigned char buff[2];
-	ret = st_asm330lhhx_mlc_purge_config(hw);
-	if (ret < 0)
-		return ret;
+
+	if (!hw->preload_mlc) {
+		ret = st_asm330lhhx_mlc_purge_config(hw);
+		if (ret < 0)
+			return ret;
+	}
 
 	mutex_lock(&hw->page_lock);
 
