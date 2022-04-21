@@ -1973,6 +1973,11 @@ checkbme:
 
 link_fail:
 	dev->power_on = false;
+	if (dev->phy_rev >= 3)
+		ep_pcie_write_mask(dev->parf + PCIE20_PARF_LTSSM, BIT(8), 0);
+	else
+		ep_pcie_write_mask(dev->elbi + PCIE20_ELBI_SYS_CTRL, BIT(0), 0);
+
 	if (!ep_pcie_debug_keep_resource)
 		ep_pcie_pipe_clk_deinit(dev);
 pipe_clk_fail:
@@ -2047,7 +2052,7 @@ int ep_pcie_core_disable_endpoint(void)
 	 * code is to toggle WAKE in such sceanrios.
 	 */
 	if (atomic_read(&dev->host_wake_pending)) {
-		EP_PCIE_DBG(dev, "PCIe V%d: %s: wake pending, init wakeup\n",
+		EP_PCIE_DBG(dev, "PCIe V%d: wake pending, init wakeup\n",
 			dev->rev);
 		ep_pcie_core_wakeup_host_internal(EP_PCIE_EVENT_PM_D3_COLD);
 	}
