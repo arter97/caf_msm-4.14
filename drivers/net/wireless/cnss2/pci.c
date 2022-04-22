@@ -607,6 +607,7 @@ int cnss_pci_call_driver_probe(struct cnss_pci_data *pci_priv)
 {
 	int ret = 0;
 	struct cnss_plat_data *plat_priv;
+	enum cnss_suspend_mode *suspend_mode;
 
 	if (!pci_priv)
 		return -ENODEV;
@@ -644,6 +645,11 @@ int cnss_pci_call_driver_probe(struct cnss_pci_data *pci_priv)
 				    ret);
 			goto out;
 		}
+		suspend_mode = pci_priv->driver_ops->suspend_mode;
+		if (suspend_mode)
+			plat_priv->suspend_mode = *suspend_mode;
+		else
+			plat_priv->suspend_mode = CNSS_SUSPEND_LEGACY;
 		clear_bit(CNSS_DRIVER_RECOVERY, &plat_priv->driver_state);
 		clear_bit(CNSS_DRIVER_LOADING, &plat_priv->driver_state);
 		set_bit(CNSS_DRIVER_PROBED, &plat_priv->driver_state);
@@ -1358,6 +1364,7 @@ int cnss_pci_dev_powerup(struct cnss_pci_data *pci_priv)
 		break;
 	case QCA6290_DEVICE_ID:
 	case QCA6390_DEVICE_ID:
+	case QCA6490_DEVICE_ID:
 	case QCN7605_DEVICE_ID:
 		ret = cnss_qca6290_powerup(pci_priv);
 		break;
@@ -1385,6 +1392,7 @@ int cnss_pci_dev_shutdown(struct cnss_pci_data *pci_priv)
 		break;
 	case QCA6290_DEVICE_ID:
 	case QCA6390_DEVICE_ID:
+	case QCA6490_DEVICE_ID:
 	case QCN7605_DEVICE_ID:
 		ret = cnss_qca6290_shutdown(pci_priv);
 		break;
@@ -1412,6 +1420,7 @@ int cnss_pci_dev_crash_shutdown(struct cnss_pci_data *pci_priv)
 		break;
 	case QCA6290_DEVICE_ID:
 	case QCA6390_DEVICE_ID:
+	case QCA6490_DEVICE_ID:
 	case QCN7605_DEVICE_ID:
 		cnss_qca6290_crash_shutdown(pci_priv);
 		break;
@@ -1439,6 +1448,7 @@ int cnss_pci_dev_ramdump(struct cnss_pci_data *pci_priv)
 		break;
 	case QCA6290_DEVICE_ID:
 	case QCA6390_DEVICE_ID:
+	case QCA6490_DEVICE_ID:
 	case QCN7605_DEVICE_ID:
 		ret = cnss_qca6290_ramdump(pci_priv);
 		break;
@@ -1873,6 +1883,19 @@ static int cnss_pci_suspend(struct device *dev)
 	if (!plat_priv)
 		goto out;
 
+	if (plat_priv->suspend_mode == CNSS_SUSPEND_POWER_DOWN) {
+		cnss_pr_dbg("Full power down while suspend, then shutdown wlan device\n");
+		/* set the driver state as CNSS_DRIVER_RECOVERY since it reuses
+		 * the recovery design for the feature of Full Power Down while
+		 * in low power mode, so set the driver state as
+		 * CNSS_DRIVER_RECOVERY before wlan driver shutdown when do
+		 * suspend.
+		 */
+		set_bit(CNSS_DRIVER_RECOVERY, &plat_priv->driver_state);
+		ret = cnss_pci_dev_shutdown(pci_priv);
+		goto out;
+	}
+
 	set_bit(CNSS_IN_SUSPEND_RESUME, &plat_priv->driver_state);
 
 	driver_ops = pci_priv->driver_ops;
@@ -1931,6 +1954,12 @@ static int cnss_pci_resume(struct device *dev)
 	if (!plat_priv)
 		goto out;
 
+	if (plat_priv->suspend_mode == CNSS_SUSPEND_POWER_DOWN) {
+		cnss_pr_dbg("Full power down while suspend, then powerup wlan device\n");
+		cnss_pci_dev_powerup(pci_priv);
+		goto out;
+	}
+
 	if (cnss_pci_check_link_status(pci_priv))
 		goto out;
 
@@ -1968,9 +1997,19 @@ static int cnss_pci_suspend_noirq(struct device *dev)
 	struct pci_dev *pci_dev = to_pci_dev(dev);
 	struct cnss_pci_data *pci_priv = cnss_get_pci_priv(pci_dev);
 	struct cnss_wlan_driver *driver_ops;
+	struct cnss_plat_data *plat_priv;
 
 	if (!pci_priv)
 		goto out;
+
+	plat_priv = pci_priv->plat_priv;
+	if (!plat_priv)
+		goto out;
+
+	if (plat_priv->suspend_mode == CNSS_SUSPEND_POWER_DOWN) {
+		cnss_pr_dbg("Full power down while suspend before, then skip suspend noirq\n");
+		goto out;
+	}
 
 	driver_ops = pci_priv->driver_ops;
 	if (driver_ops && driver_ops->suspend_noirq)
@@ -1989,9 +2028,19 @@ static int cnss_pci_resume_noirq(struct device *dev)
 	struct pci_dev *pci_dev = to_pci_dev(dev);
 	struct cnss_pci_data *pci_priv = cnss_get_pci_priv(pci_dev);
 	struct cnss_wlan_driver *driver_ops;
+	struct cnss_plat_data *plat_priv;
 
 	if (!pci_priv)
 		goto out;
+
+	plat_priv = pci_priv->plat_priv;
+	if (!plat_priv)
+		goto out;
+
+	if (plat_priv->suspend_mode == CNSS_SUSPEND_POWER_DOWN) {
+		cnss_pr_dbg("Full power down while suspend before, then skip resume noirq\n");
+		goto out;
+	}
 
 	driver_ops = pci_priv->driver_ops;
 	if (driver_ops && driver_ops->resume_noirq &&
@@ -2302,7 +2351,8 @@ int cnss_pci_force_wake_request(struct device *dev)
 	if (!pci_priv)
 		return -ENODEV;
 
-	if (pci_priv->device_id != QCA6390_DEVICE_ID)
+	if (pci_priv->device_id != QCA6390_DEVICE_ID &&
+	    pci_priv->device_id != QCA6490_DEVICE_ID)
 		return 0;
 
 	mhi_ctrl = pci_priv->mhi_ctrl;
@@ -2331,7 +2381,8 @@ int cnss_pci_is_device_awake(struct device *dev)
 	if (!pci_priv)
 		return -ENODEV;
 
-	if (pci_priv->device_id != QCA6390_DEVICE_ID)
+	if (pci_priv->device_id != QCA6390_DEVICE_ID &&
+	    pci_priv->device_id != QCA6490_DEVICE_ID)
 		return true;
 
 	mhi_ctrl = pci_priv->mhi_ctrl;
@@ -2352,7 +2403,8 @@ int cnss_pci_force_wake_release(struct device *dev)
 	if (!pci_priv)
 		return -ENODEV;
 
-	if (pci_priv->device_id != QCA6390_DEVICE_ID)
+	if (pci_priv->device_id != QCA6390_DEVICE_ID &&
+	    pci_priv->device_id != QCA6490_DEVICE_ID)
 		return 0;
 
 	mhi_ctrl = pci_priv->mhi_ctrl;
@@ -3946,7 +3998,9 @@ static int cnss_pci_probe(struct pci_dev *pci_dev,
 		break;
 	case QCA6290_DEVICE_ID:
 	case QCA6390_DEVICE_ID:
-		if (cnss_get_dual_wlan() && plat_priv->enumerate_done)
+	case QCA6490_DEVICE_ID:
+		if ((cnss_get_dual_wlan() && plat_priv->enumerate_done) ||
+		    !cnss_get_dual_wlan())
 			cnss_pci_set_wlaon_pwr_ctrl(pci_priv, false,
 						    false, false);
 	case QCN7605_DEVICE_ID:
@@ -4026,6 +4080,7 @@ static void cnss_pci_remove(struct pci_dev *pci_dev)
 	switch (pci_dev->device) {
 	case QCA6290_DEVICE_ID:
 	case QCA6390_DEVICE_ID:
+	case QCA6490_DEVICE_ID:
 		cnss_pci_unregister_mhi(pci_priv);
 		cnss_pci_disable_msi(pci_priv);
 		del_timer(&pci_priv->dev_rddm_timer);
@@ -4049,6 +4104,7 @@ static const struct pci_device_id cnss_pci_id_table[] = {
 	{ QCA6174_VENDOR_ID, QCA6174_DEVICE_ID, PCI_ANY_ID, PCI_ANY_ID },
 	{ QCA6290_VENDOR_ID, QCA6290_DEVICE_ID, PCI_ANY_ID, PCI_ANY_ID },
 	{ QCA6390_VENDOR_ID, QCA6390_DEVICE_ID, PCI_ANY_ID, PCI_ANY_ID },
+	{ QCA6490_VENDOR_ID, QCA6490_DEVICE_ID, PCI_ANY_ID, PCI_ANY_ID },
 	{ QCN7605_VENDOR_ID, QCN7605_DEVICE_ID, PCI_ANY_ID, PCI_ANY_ID},
 	{ 0 }
 };

@@ -60,6 +60,19 @@ struct cnss_vreg_info {
 	u32 enabled;
 };
 
+struct cnss_clk_cfg {
+	const char *name;
+	u32 freq;
+	u32 required;
+};
+
+struct cnss_clk_info {
+	struct list_head list;
+	struct clk *clk;
+	struct cnss_clk_cfg cfg;
+	u32 enabled;
+};
+
 struct cnss_pinctrl_info {
 	struct pinctrl *pinctrl;
 	struct pinctrl_state *bootstrap_active;
@@ -275,6 +288,7 @@ struct cnss_plat_data {
 	void *bus_priv;
 	enum cnss_dev_bus_type bus_type;
 	struct list_head vreg_list;
+	struct list_head clk_list;
 	struct cnss_pinctrl_info pinctrl_info;
 	struct cnss_subsys_info subsys_info;
 	struct cnss_ramdump_info ramdump_info;
@@ -332,6 +346,7 @@ struct cnss_plat_data {
 	bool enumerate_done;
 	int qrtr_node_id;
 	unsigned int wlfw_service_instance_id;
+	enum cnss_suspend_mode suspend_mode;
 };
 
 struct cnss_plat_data *cnss_get_plat_priv(struct platform_device *plat_dev);
@@ -346,6 +361,8 @@ int cnss_driver_event_post(struct cnss_plat_data *plat_priv,
 int cnss_get_vreg(struct cnss_plat_data *plat_priv);
 int cnss_get_pinctrl(struct cnss_plat_data *plat_priv);
 void cnss_put_vreg(struct cnss_plat_data *plat_priv);
+int cnss_get_clk(struct cnss_plat_data *plat_priv);
+void cnss_put_clk(struct cnss_plat_data *plat_priv);
 void cnss_put_pinctrl(struct cnss_plat_data *plat_priv);
 int cnss_power_on_device(struct cnss_plat_data *plat_priv);
 void cnss_power_off_device(struct cnss_plat_data *plat_priv);
