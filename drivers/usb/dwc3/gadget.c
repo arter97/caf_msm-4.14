@@ -800,6 +800,11 @@ static int __dwc3_gadget_ep_enable(struct dwc3_ep *dep,
 		dep->trb_dequeue = 0;
 		dep->trb_enqueue = 0;
 
+		if (usb_endpoint_xfer_isoc(desc) && (desc->bInterval == 1)) {
+			dbg_event(dep->number, "HIGHBWISOCEP ENABLE", 0);
+			dwc->active_highbw_isoc = true;
+		}
+
 		if (usb_endpoint_xfer_control(desc))
 			goto out;
 
@@ -2194,6 +2199,8 @@ static int dwc3_gadget_run_stop(struct dwc3 *dwc, int is_on, int suspend)
 		dwc->err_evt_seen = false;
 		dwc->pullups_connected = false;
 		dwc->connected = false;
+		dwc->active_highbw_isoc = false;
+		dwc->ignore_statusirq = false;
 
 		__dwc3_gadget_ep_disable(dwc->eps[0]);
 		__dwc3_gadget_ep_disable(dwc->eps[1]);
@@ -3358,6 +3365,8 @@ static void dwc3_gadget_reset_interrupt(struct dwc3 *dwc)
 	dwc->b_suspend = false;
 	dwc3_notify_event(dwc, DWC3_CONTROLLER_NOTIFY_OTG_EVENT, 0);
 
+	dwc->active_highbw_isoc = false;
+	dwc->ignore_statusirq = false;
 	usb_gadget_vbus_draw(&dwc->gadget, 100);
 
 	dwc3_reset_gadget(dwc);

@@ -1011,6 +1011,8 @@ struct dwc3_scratchpad_array {
  * @num_gsi_eps: number of GSI based hardware accelerated endpoints
  * @dual_port: If true, this core supports two ports
  * @force_gen1: use to force gen1 speed on gen2 controller
+ * @active_highbw_isoc: if true, high bandwidth isochronous endpoint is active.
+ * @ignore_statusirq: if true, ignore irq triggered for status stage.
  */
 struct dwc3 {
 	struct work_struct	drd_work;
@@ -1235,6 +1237,8 @@ struct dwc3 {
 	ktime_t			last_run_stop;
 	u32			num_gsi_eps;
 	bool			dual_port;
+	bool			active_highbw_isoc;
+	bool			ignore_statusirq;
 };
 
 #define work_to_dwc(w)		(container_of((w), struct dwc3, drd_work))
