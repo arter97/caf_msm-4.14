@@ -1,4 +1,6 @@
 /* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -668,7 +670,8 @@ int ipa3_request_gsi_channel(struct ipa_request_gsi_channel_params *params,
 	} else {
 		IPADBG("Skipping endpoint configuration.\n");
 		if (IPA_CLIENT_IS_PROD(ipa3_ctx->ep[ipa_ep_idx].client) &&
-			ipa3_ctx->ep[ipa_ep_idx].client == IPA_CLIENT_USB_PROD
+			ipa3_ctx->ep[ipa_ep_idx].client == 
+			(IPA_CLIENT_USB_PROD || IPA_CLIENT_USB2_PROD)
 			&& !ipa3_is_mhip_offload_enabled()) {
 			if (ipa3_cfg_ep_seq(ipa_ep_idx,
 						&params->ipa_ep_cfg.seq)) {
