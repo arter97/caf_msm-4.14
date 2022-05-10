@@ -282,6 +282,7 @@ ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 		qcs610-iot-overlay.dtbo \
 		qcs610-ipc-overlay.dtbo \
 		qcs610-opk-overlay.dtbo \
+		qcs610-opk-wsa-overlay.dtbo \
 		qcs410-iot-overlay.dtbo \
 		qcs410-ipc-overlay.dtbo \
 		prairie-iot-idp-overlay.dtbo \
@@ -309,6 +310,7 @@ sa6155p-v3-adp-air-overlay.dtbo-base := sa6155p.dtb
 qcs610-iot-overlay.dtbo-base := qcs610.dtb qcs610-2gb.dtb
 qcs610-ipc-overlay.dtbo-base := qcs610.dtb qcs610-2gb.dtb
 qcs610-opk-overlay.dtbo-base := qcs610.dtb qcs610-2gb.dtb
+qcs610-opk-wsa-overlay.dtbo-base := qcs610.dtb qcs610-2gb.dtb
 qcs410-iot-overlay.dtbo-base := qcs410.dtb qcs410-2gb.dtb
 qcs410-ipc-overlay.dtbo-base := qcs410.dtb qcs410-2gb.dtb
 prairie-iot-idp-overlay.dtbo-base := qcs610.dtb qcs610-2gb.dtb
