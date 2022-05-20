@@ -897,7 +897,7 @@ int32_t cam_csiphy_core_cfg(void *phy_dev,
 		}
 
 		csiphy_dev->share_count--;
-		if (csiphy_dev->is_acquired_dev_combo_mode == 0 ||
+		if (csiphy_dev->is_acquired_dev_combo_mode == 0 &&
 				csiphy_dev->share_count > 0) {
 			CAM_DBG(CAM_CSIPHY, "Reuse device, skip release");
 			goto release_mutex;
