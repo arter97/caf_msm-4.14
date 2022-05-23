@@ -15,6 +15,7 @@
 
 #include <linux/iommu.h>
 #include <linux/io-pgtable-fast.h>
+#include <linux/dma-direction.h>
 
 struct dma_iommu_mapping;
 struct io_pgtable_ops;
@@ -41,6 +42,13 @@ struct dma_fast_smmu_mapping {
 	spinlock_t	lock;
 	struct notifier_block notifier;
 };
+
+#ifndef CONFIG_ARM64
+void __dma_page_cpu_to_dev(struct page *page, unsigned long off,
+			size_t size, enum dma_data_direction dir);
+void __dma_page_dev_to_cpu(struct page *page, unsigned long off,
+			size_t size, enum dma_data_direction dir);
+#endif
 
 #ifdef CONFIG_IOMMU_IO_PGTABLE_FAST
 int fast_smmu_init_mapping(struct device *dev,
