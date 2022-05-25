@@ -10,7 +10,6 @@
  * GNU General Public License for more details.
  */
 
-#if defined(CONFIG_SUBSYS_BACKUP)
 &soc {
 	subsys_backup: qcom,subsys-backup {
 		compatible = "qcom,subsys-backup";
@@ -26,7 +25,6 @@
 		size = <0x600000>;
 	};
 };
-#endif
 
 
 
