@@ -123,7 +123,7 @@
 };
 
 &mdss_dsi0 {
-	qcom,dsi-pref-prim-pan = <&dsi_hx8394d_720_vid>;
+	qcom,dsi-pref-prim-pan = <&dsi_ili9881c_720p_video>;
 	pinctrl-names = "mdss_default", "mdss_sleep";
 	pinctrl-0 = <&mdss_dsi_active &mdss_te_active>;
 	pinctrl-1 = <&mdss_dsi_suspend &mdss_te_suspend>;
@@ -133,9 +133,11 @@
 	qcom,platform-bklight-en-gpio = <&tlmm 48 0>;
 };
 
-&dsi_hx8394d_720_vid {
+&dsi_ili9881c_720p_video {
 	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_tlmm_gpio";
 	qcom,mdss-dsi-bl-pmic-bank-select = <0>;
+	qcom,mdss-dsi-bl-min-level = <1>;
+	qcom,mdss-dsi-bl-max-level = <4095>;
 	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
 };
 

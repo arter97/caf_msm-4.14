@@ -12,6 +12,7 @@
 
 #include "dsi-panel-hx8394d-720p-video.dtsi"
 #include "rgb-panel-st7789v.dtsi"
+#include "dsi-panel-ili988c-dual-video.dtsi"
 
 &soc {
 	dsi_panel_pwr_supply: dsi_panel_pwr_supply {
