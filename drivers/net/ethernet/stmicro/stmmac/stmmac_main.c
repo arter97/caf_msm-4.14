@@ -300,7 +300,7 @@ static inline u32 stmmac_rx_dirty(struct stmmac_priv *priv, u32 queue)
 static inline void stmmac_hw_fix_mac_speed(struct stmmac_priv *priv)
 {
 	if (likely(priv->plat->fix_mac_speed)) {
-		if (priv->plat->mac2mac_en) {
+		if (priv->plat->mac2mac_en || priv->plat->switch_mdio) {
 			priv->plat->fix_mac_speed(priv->plat->bsp_priv,
 					priv->speed);
 			return;
@@ -2826,7 +2826,7 @@ static int stmmac_open(struct net_device *dev)
 	struct stmmac_priv *priv = netdev_priv(dev);
 	int ret;
 
-	if (!priv->plat->mac2mac_en &&
+	if ((!priv->plat->mac2mac_en && !priv->plat->switch_mdio) &&
 	    (priv->hw->pcs != STMMAC_PCS_RGMII &&
 	     priv->hw->pcs != STMMAC_PCS_TBI &&
 	     priv->hw->pcs != STMMAC_PCS_RTBI)) {
@@ -2917,7 +2917,7 @@ static int stmmac_open(struct net_device *dev)
 	if (priv->hw_offload_enabled)
 		ethqos_ipa_offload_event_handler(priv, EV_DEV_OPEN);
 
-	if (priv->plat->mac2mac_en) {
+	if (priv->plat->mac2mac_en || priv->plat->switch_mdio) {
 		stmmac_mac2mac_adjust_link(priv->plat->mac2mac_rgmii_speed,
 					   priv);
 		priv->plat->mac2mac_link = true;
@@ -5236,7 +5236,7 @@ int stmmac_resume(struct device *dev)
 
 	stmmac_start_all_queues(priv);
 
-	if (priv->plat->mac2mac_en) {
+	if (priv->plat->mac2mac_en || priv->plat->switch_mdio) {
 		stmmac_mac2mac_adjust_link(priv->plat->mac2mac_rgmii_speed,
 					   priv);
 		priv->plat->mac2mac_link = true;
