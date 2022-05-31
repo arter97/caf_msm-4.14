@@ -603,3 +603,74 @@
 		};
 	};
 };
+
+&qupv3_se1_i2c {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	status = "ok";
+	qcom,i2c-touch-active = "focaltech,fts_ts";
+
+	focaltech@38 {
+		status = "ok";
+		compatible = "focaltech,fts_ts";
+		reg = <0x38>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <87 0x2008>;
+		focaltech,reset-gpio = <&tlmm 75 0x0>;
+		focaltech,irq-gpio = <&tlmm 87 0x2008>;
+		focaltech,max-touch-number = <5>;
+		focaltech,display-coords = <0 0 720 1280>;
+
+		vdd-supply = <&L7C>;
+		vcc_i2c-supply = <&L13A>;
+
+		pinctrl-names = "pmx_ts_active", "pmx_ts_suspend",
+			"pmx_ts_release";
+		pinctrl-0 = <&ts_int_active &ts_reset_active>;
+		pinctrl-1 = <&ts_int_suspend &ts_reset_suspend>;
+		pinctrl-2 = <&ts_release>;
+
+		panel = <&dsi_ili9881c_720p_video>;
+	};
+};
+
+&usb1 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&usb1_vbus_on>;
+	dwc3@a800000 {
+		dr_mode = "host";
+	};
+};
+
+&L14A {
+	regulator-always-on;
+};
+
+&qusb_phy0 {
+	reg = <0x88e2000 0x180>,
+		<0x007801f8 0x4>,
+		<0x01fcb3e4 0x4>;
+	reg-names = "qusb_phy_base",
+		"tune2_efuse_addr",
+		"tcsr_conn_box_spare_0";
+};
+
+&tlmm {
+	usb1_vbus_cntl {
+		usb1_vbus_on: usb1_vbus_on {
+			mux {
+				pins = "gpio54";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio54";
+				drive-strength = <2>;   /* 2 mA */
+				bias-disable;
+				output-high;
+			};
+		};
+	};
+};
