@@ -440,6 +440,7 @@ struct mdss_dsi_ctrl_pdata {
 	int mode_gpio;
 	int intf_mux_gpio;
 	int bklt_ctrl;	/* backlight ctrl */
+	bool bl_inverted_dbv;
 	bool pwm_pmi;
 	int pwm_period;
 	int pwm_pmic_gpio;

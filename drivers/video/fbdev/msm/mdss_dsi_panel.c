@@ -215,9 +215,9 @@ static void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
 
-static char led_pwm1[2] = {0x51, 0x0};	/* DTYPE_DCS_WRITE1 */
+static char led_pwm1[3] = {0x51, 0x0, 0x0};	/* DTYPE_DCS_WRITE1 */
 static struct dsi_cmd_desc backlight_cmd = {
-	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1)},
+	{DTYPE_DCS_LWRITE, 1, 0, 0, 1, sizeof(led_pwm1)},
 	led_pwm1
 };
 
@@ -232,10 +232,22 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 			return;
 	}
 
+	if (level > 0xffff) {
+		pr_err("%s: invalid bl level=%d\n", __func__, level);
+		return;
+	}
+
 	pr_debug("%s: level=%d\n", __func__, level);
 
-	led_pwm1[1] = (unsigned char)level;
+	if (ctrl->bl_inverted_dbv) {
+		led_pwm1[1] = (unsigned char)(level >> 8); // MSB
+		led_pwm1[2] = (unsigned char)(level & 0xff); // LSB
+	} else {
+		led_pwm1[1] = (unsigned char)(level & 0xff); // LSB
+		led_pwm1[2] = (unsigned char)(level >> 8); // MSB
+	}
 
+	pr_debug("%s: 1st[%x], 2nd[%x]\n", __func__, led_pwm1[1], led_pwm1[2]);
 	memset(&cmdreq, 0, sizeof(cmdreq));
 	cmdreq.cmds = &backlight_cmd;
 	cmdreq.cmds_cnt = 1;
@@ -2295,6 +2307,7 @@ int mdss_panel_parse_bl_settings(struct device_node *np,
 	u32 tmp;
 
 	ctrl_pdata->bklt_ctrl = UNKNOWN_CTRL;
+	ctrl_pdata->bl_inverted_dbv = 0;
 	data = of_get_property(np, "qcom,mdss-dsi-bl-pmic-control-type", NULL);
 	if (data) {
 		if (!strcmp(data, "bl_ctrl_wled")) {
@@ -2347,8 +2360,10 @@ int mdss_panel_parse_bl_settings(struct device_node *np,
 			}
 		} else if (!strcmp(data, "bl_ctrl_dcs")) {
 			ctrl_pdata->bklt_ctrl = BL_DCS_CMD;
-			pr_debug("%s: Configured DCS_CMD bklt ctrl\n",
-								__func__);
+			ctrl_pdata->bl_inverted_dbv = of_property_read_bool(np,
+				"qcom,mdss-dsi-bl-inverted-dbv");
+			pr_debug("%s: Configured DCS bklt ctrl inv(%d)\n",
+				__func__, ctrl_pdata->bl_inverted_dbv);
 		} else if (!strcmp(data, "bl_ctrl_tlmm_gpio")) {
 			ctrl_pdata->bklt_ctrl = BL_TLMM_GPIO;
 			pr_debug("%s: Configured TLMM_GPIO bklt ctrl\n",
