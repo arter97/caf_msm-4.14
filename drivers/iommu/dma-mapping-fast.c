@@ -308,7 +308,7 @@ static void __fast_smmu_free_iova(struct dma_fast_smmu_mapping *mapping,
 	mapping->have_stale_tlbs = true;
 }
 
-
+#ifdef CONFIG_ARM64
 static void __fast_dma_page_cpu_to_dev(struct page *page, unsigned long off,
 				       size_t size, enum dma_data_direction dir)
 {
@@ -327,6 +327,19 @@ static void __fast_dma_page_dev_to_cpu(struct page *page, unsigned long off,
 	if (dir != DMA_TO_DEVICE && off == 0 && size >= PAGE_SIZE)
 		set_bit(PG_dcache_clean, &page->flags);
 }
+#else
+static void __fast_dma_page_cpu_to_dev(struct page *page, unsigned long off,
+				size_t size, enum dma_data_direction dir)
+{
+	__dma_page_cpu_to_dev(page, off, size, dir);
+}
+
+static void __fast_dma_page_dev_to_cpu(struct page *page, unsigned long off,
+				size_t size, enum dma_data_direction dir)
+{
+	__dma_page_dev_to_cpu(page, off, size, dir);
+}
+#endif
 
 static int __fast_dma_direction_to_prot(enum dma_data_direction dir)
 {
