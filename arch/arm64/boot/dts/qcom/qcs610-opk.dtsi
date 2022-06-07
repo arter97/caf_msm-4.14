@@ -180,6 +180,7 @@
 		"dev-emac-rgmii_rxc_state", "dev-emac-rgmii_rx_ctl_state",
 		"dev-emac-phy_intr", "dev-emac-phy_reset_state",
 		"dev-emac_pin_pps_0";
+		status = "disabled";
 
 		pinctrl-0 = <&emac_mdc>;
 		pinctrl-1 = <&emac_mdio>;
