@@ -660,8 +660,6 @@
 /* for usb begin */
 &usb1 {
 	status = "okay";
-	qcom,default-mode-host;
-	qcom,ignore-wakeup-src-in-hostmode;
 
 	qcom,use-ext-vbus-ctrl;
 	pinctrl-names = "default", "sleep";
