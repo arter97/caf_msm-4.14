@@ -1,4 +1,5 @@
 /* Copyright (c) 2010-2016, 2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -788,6 +789,11 @@ static void hdmi_ddc_trigger(struct hdmi_tx_ddc_ctrl *ddc_ctrl,
 	if (mode == TRIGGER_READ && seg) {
 		DSS_REG_W_ND(io, HDMI_DDC_DATA, BIT(31) | (seg_addr << 8));
 		DSS_REG_W_ND(io, HDMI_DDC_DATA, seg_num << 8);
+		DSS_REG_W_ND(io, HDMI_DDC_DATA, (ddc_data->dev_addr << 8));
+	} else {
+		/* handle portion #1 */
+		DSS_REG_W_ND(io, HDMI_DDC_DATA,
+				BIT(31) | (ddc_data->dev_addr << 8));
 	}
 
 	/* handle portion #1 */
