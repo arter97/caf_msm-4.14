@@ -274,9 +274,17 @@ do {\
 #define TLMM_RGMII_HDRV_PULL_CTL1_ADDRESS\
 	(((unsigned long *)\
 		(TLMM_BASE_ADDRESS + TLMM_RGMII_HDRV_PULL_CTL1_ADDRESS_OFFSET)))
+#define TLMM_MDC_MDIO_HDRV_PULL_CTL_ADDRESS\
+	(((unsigned long *)\
+		(TLMM_BASE_ADDRESS + 0xA9000)))
 
 #define TLMM_RGMII_HDRV_PULL_CTL1_RGWR(data)\
 	iowrite32(data,	(void __iomem *)TLMM_RGMII_HDRV_PULL_CTL1_ADDRESS)
+
+#define TLMM_MDC_MDIO_HDRV_PULL_CTL_RGWR(data)\
+	iowrite32(data, (void __iomem *)TLMM_MDC_MDIO_HDRV_PULL_CTL_ADDRESS)
+#define TLMM_MDC_MDIO_HDRV_PULL_CTL_RGRD(data)\
+		((data) = ioread32((void __iomem *)TLMM_MDC_MDIO_HDRV_PULL_CTL_ADDRESS))
 
 #define TLMM_RGMII_HDRV_PULL_CTL1_RGRD(data)\
 	((data) = ioread32((void __iomem *)TLMM_RGMII_HDRV_PULL_CTL1_ADDRESS))
