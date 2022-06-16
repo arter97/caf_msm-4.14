@@ -90,7 +90,8 @@ DECLARE_UAC_AC_HEADER_DESCRIPTOR(2);
 /* 2 input terminals and 2 output terminals */
 #define UAC_DT_TOTAL_LENGTH (UAC_DT_AC_HEADER_LENGTH \
 	+ 2*UAC_DT_INPUT_TERMINAL_SIZE + 2*UAC_DT_OUTPUT_TERMINAL_SIZE \
-	+ 2*UAC_DT_FEATURE_UNIT_SIZE(0) + UAC_DT_MIXER_UNIT_SIZE)
+	+ UAC_DT_FEATURE_UNIT_SIZE(0) \
+	+ UAC_DT_FEATURE_UNIT_SIZE(1))
 /* B.3.2  Class-Specific AC Interface Descriptor */
 static struct uac1_ac_header_descriptor_2 ac_header_desc = {
 	.bLength =		UAC_DT_AC_HEADER_LENGTH,
@@ -112,31 +113,31 @@ static struct uac_input_terminal_descriptor usb_out_it_desc = {
 	.wChannelConfig =	cpu_to_le16(0x3),
 };
 
-#define FEATURE_UNIT_ID		5
-#define IO_OUT_OT_ID	2
+#define FEATURE_UNIT_ID		2
+#define IO_OUT_OT_ID	3
+#define IO_IN_IT_ID	4
 static struct uac1_output_terminal_descriptor io_out_ot_desc = {
 	.bLength		= UAC_DT_OUTPUT_TERMINAL_SIZE,
 	.bDescriptorType	= USB_DT_CS_INTERFACE,
 	.bDescriptorSubtype	= UAC_OUTPUT_TERMINAL,
 	.bTerminalID		= IO_OUT_OT_ID,
 	.wTerminalType		= cpu_to_le16(UAC_OUTPUT_TERMINAL_SPEAKER),
-	.bAssocTerminal		= 0,
+	.bAssocTerminal		= IO_IN_IT_ID,
 	.bSourceID		= FEATURE_UNIT_ID,
 };
 
-#define IO_IN_IT_ID	3
 static struct uac_input_terminal_descriptor io_in_it_desc = {
 	.bLength		= UAC_DT_INPUT_TERMINAL_SIZE,
 	.bDescriptorType	= USB_DT_CS_INTERFACE,
 	.bDescriptorSubtype	= UAC_INPUT_TERMINAL,
 	.bTerminalID		= IO_IN_IT_ID,
 	.wTerminalType		= cpu_to_le16(UAC_INPUT_TERMINAL_MICROPHONE),
-	.bAssocTerminal		= 0,
+	.bAssocTerminal		= IO_OUT_OT_ID,
 	.wChannelConfig		= cpu_to_le16(0x3),
 };
 
-#define MIC_FEATURE_UNIT_ID		6
-#define USB_IN_OT_ID	4
+#define MIC_FEATURE_UNIT_ID		5
+#define USB_IN_OT_ID	6
 static struct uac1_output_terminal_descriptor usb_in_ot_desc = {
 	.bLength =		UAC_DT_OUTPUT_TERMINAL_SIZE,
 	.bDescriptorType =	USB_DT_CS_INTERFACE,
@@ -147,31 +148,18 @@ static struct uac1_output_terminal_descriptor usb_in_ot_desc = {
 	.bSourceID =		MIC_FEATURE_UNIT_ID,
 };
 
-DECLARE_UAC_FEATURE_UNIT_DESCRIPTOR(0);
-
-#define MIXER_UNIT_ID 9
-static struct uac_feature_unit_descriptor_0 feature_unit_desc = {
-	.bLength		= UAC_DT_FEATURE_UNIT_SIZE(0),
+DECLARE_UAC_FEATURE_UNIT_DESCRIPTOR(1);
+static struct uac_feature_unit_descriptor_1 feature_unit_desc = {
+	.bLength		= UAC_DT_FEATURE_UNIT_SIZE(1),
 	.bDescriptorType	= USB_DT_CS_INTERFACE,
 	.bDescriptorSubtype	= UAC_FEATURE_UNIT,
 	.bUnitID		= FEATURE_UNIT_ID,
-	.bSourceID		= MIXER_UNIT_ID,
+	.bSourceID		= USB_OUT_IT_ID,
 	.bControlSize		= 0x2,
 	.bmaControls[0]		= cpu_to_le16(UAC_FU_MUTE | UAC_FU_VOLUME),
 };
 
-static struct uac1_mixer_unit_descriptor mixer_unit_desc = {
-	.bLength = UAC_DT_MIXER_UNIT_SIZE,
-	.bDescriptorType = USB_DT_CS_INTERFACE,
-	.bDescriptorSubtype = UAC_MIXER_UNIT,
-	.bUnitID = MIXER_UNIT_ID,
-	.bNrInPins = 2,
-	.baSourceID[0] = USB_OUT_IT_ID,
-	.baSourceID[1] = MIC_FEATURE_UNIT_ID,
-	.bNrChannels = 1,
-	.wChannelConfig		= cpu_to_le16(0x1),
-};
-
+DECLARE_UAC_FEATURE_UNIT_DESCRIPTOR(0);
 static struct uac_feature_unit_descriptor_0 mic_feature_unit_desc = {
 	.bLength		= UAC_DT_FEATURE_UNIT_SIZE(0),
 	.bDescriptorType	= USB_DT_CS_INTERFACE,
@@ -374,13 +362,11 @@ static struct usb_descriptor_header *f_audio_desc[] = {
 	(struct usb_descriptor_header *)&ac_header_desc,
 
 	(struct usb_descriptor_header *)&usb_out_it_desc,
+	(struct usb_descriptor_header *)&feature_unit_desc,
 	(struct usb_descriptor_header *)&io_out_ot_desc,
 	(struct usb_descriptor_header *)&io_in_it_desc,
-	(struct usb_descriptor_header *)&usb_in_ot_desc,
-
-	(struct usb_descriptor_header *)&feature_unit_desc,
 	(struct usb_descriptor_header *)&mic_feature_unit_desc,
-	(struct usb_descriptor_header *)&mixer_unit_desc,
+	(struct usb_descriptor_header *)&usb_in_ot_desc,
 
 	(struct usb_descriptor_header *)&as_out_interface_alt_0_desc,
 	(struct usb_descriptor_header *)&as_out_interface_alt_1_desc,
@@ -408,13 +394,11 @@ static struct usb_descriptor_header *f_audio_ss_desc[] = {
 	(struct usb_descriptor_header *)&ac_header_desc,
 
 	(struct usb_descriptor_header *)&usb_out_it_desc,
+	(struct usb_descriptor_header *)&feature_unit_desc,
 	(struct usb_descriptor_header *)&io_out_ot_desc,
 	(struct usb_descriptor_header *)&io_in_it_desc,
-	(struct usb_descriptor_header *)&usb_in_ot_desc,
-
-	(struct usb_descriptor_header *)&feature_unit_desc,
 	(struct usb_descriptor_header *)&mic_feature_unit_desc,
-	(struct usb_descriptor_header *)&mixer_unit_desc,
+	(struct usb_descriptor_header *)&usb_in_ot_desc,
 
 	(struct usb_descriptor_header *)&as_out_interface_alt_0_desc,
 	(struct usb_descriptor_header *)&as_out_interface_alt_1_desc,
