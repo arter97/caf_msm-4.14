@@ -121,6 +121,7 @@ static int hdmi_tx_get_audio_edid_blk(struct platform_device *pdev,
 	struct msm_ext_disp_audio_edid_blk *blk);
 static int hdmi_tx_get_cable_status(struct platform_device *pdev, u32 vote);
 static void hdmi_tx_audio_off(struct hdmi_tx_ctrl *hdmi_ctrl);
+static bool hdmi_tx_hw_is_cable_connected(struct hdmi_tx_ctrl *hdmi_ctrl);
 
 static struct mdss_hw hdmi_tx_hw = {
 	.hw_ndx = MDSS_HW_HDMI,
@@ -494,7 +495,8 @@ static void hdmi_tx_send_cable_notification(
 		return;
 	}
 
-	if (hdmi_ctrl->hpd_notif_state == !!val) {
+	if ((hdmi_ctrl->hpd_notif_state == !!val)
+		&& !(hdmi_ctrl->resume_notify)) {
 		pr_debug("%s: no change in HPD state\n", __func__);
 		return;
 	}
@@ -511,6 +513,8 @@ static void hdmi_tx_send_cable_notification(
 	envp[2] = NULL;
 
 	kobject_uevent_env(hdmi_ctrl->kobj, KOBJ_CHANGE, envp);
+
+	hdmi_ctrl->resume_notify = false;
 } /* hdmi_tx_send_cable_notification */
 
 static inline void hdmi_tx_ack_state(
@@ -3922,15 +3926,21 @@ static int hdmi_tx_post_evt_handle_resume(struct hdmi_tx_ctrl *hdmi_ctrl)
 
 	if (!hdmi_tx_hw_is_cable_connected(hdmi_ctrl)) {
 		u32 timeout;
+		u32 connected = 0;
+
+		hdmi_ctrl->resume_notify = true;
 
 		reinit_completion(&hdmi_ctrl->hpd_int_done);
 		timeout = wait_for_completion_timeout(
 			&hdmi_ctrl->hpd_int_done, HZ/10);
 		if (!timeout) {
 			pr_debug("cable removed during suspend\n");
-		hdmi_tx_audio_notify(hdmi_ctrl, 0);
-		hdmi_tx_send_cable_notification(hdmi_ctrl, 0);
+			hdmi_tx_audio_notify(hdmi_ctrl, 0);
+			hdmi_tx_send_cable_notification(hdmi_ctrl, 0);
 		}
+		connected = hdmi_tx_hw_is_cable_connected(hdmi_ctrl);
+		pr_debug("re-notify after resume con(%d)\n", connected);
+		hdmi_tx_send_cable_notification(hdmi_ctrl, connected);
 	}
 
 	return 0;
@@ -4879,6 +4889,8 @@ static int hdmi_tx_probe(struct platform_device *pdev)
 			hdmi_ctrl->power_data_enable[i] = true;
 		}
 	}
+
+	hdmi_ctrl->resume_notify = false;
 
 	return rc;
 
