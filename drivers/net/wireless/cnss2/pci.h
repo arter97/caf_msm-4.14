@@ -65,6 +65,7 @@ struct cnss_pci_data {
 	struct cnss_wlan_driver *driver_ops;
 	bool pci_link_state;
 	bool pci_link_down_ind;
+	u32 pci_link_down_count;
 	struct pci_saved_state *saved_state;
 	struct pci_saved_state *default_state;
 	struct msm_pcie_register_event msm_pci_event;
@@ -137,6 +138,7 @@ static inline int cnss_pci_get_auto_suspended(void *bus_priv)
 
 int cnss_suspend_pci_link(struct cnss_pci_data *pci_priv);
 int cnss_resume_pci_link(struct cnss_pci_data *pci_priv);
+int cnss_pci_recover_link_down(struct cnss_pci_data *pci_priv);
 int cnss_pci_init(struct cnss_plat_data *plat_priv);
 void cnss_pci_deinit(struct cnss_plat_data *plat_priv);
 int cnss_pci_alloc_fw_mem(struct cnss_pci_data *pci_priv);
