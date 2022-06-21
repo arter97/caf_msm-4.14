@@ -81,16 +81,22 @@ static int cam_fd_dev_close(struct v4l2_subdev *sd,
 	}
 
 	mutex_lock(&fd_dev->lock);
+	if (fd_dev->open_cnt <= 0) {
+		mutex_unlock(&fd_dev->lock);
+		return -EINVAL;
+	}
 	fd_dev->open_cnt--;
 	CAM_DBG(CAM_FD, "FD Subdev open count %d", fd_dev->open_cnt);
-	mutex_unlock(&fd_dev->lock);
 
 	if (!node) {
 		CAM_ERR(CAM_FD, "Node ptr is NULL");
+		mutex_unlock(&fd_dev->lock);
 		return -EINVAL;
 	}
 
-	cam_node_shutdown(node);
+	if (fd_dev->open_cnt == 0)
+		cam_node_shutdown(node);
+	mutex_unlock(&fd_dev->lock);
 
 	return 0;
 }
@@ -143,6 +149,7 @@ static int cam_fd_dev_probe(struct platform_device *pdev)
 	}
 
 	mutex_init(&g_fd_dev.lock);
+	g_fd_dev.open_cnt = 0;
 	g_fd_dev.probe_done = true;
 
 	CAM_DBG(CAM_FD, "Camera FD probe complete");

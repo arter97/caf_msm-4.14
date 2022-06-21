@@ -129,6 +129,7 @@ struct cam_ois_ctrl_t {
 	uint8_t ois_fw_flag;
 	uint8_t is_ois_calib;
 	struct cam_ois_opcode opcode;
+	uint32_t open_cnt;
 };
 
 #endif /*_CAM_OIS_DEV_H_ */

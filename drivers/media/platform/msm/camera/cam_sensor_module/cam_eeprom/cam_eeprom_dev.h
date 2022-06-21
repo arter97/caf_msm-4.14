@@ -183,6 +183,7 @@ struct cam_eeprom_ctrl_t {
 	enum cam_eeprom_state cam_eeprom_state;
 	bool userspace_probe;
 	struct cam_eeprom_memory_block_t cal_data;
+	uint32_t open_cnt;
 };
 
 int32_t cam_eeprom_update_i2c_info(struct cam_eeprom_ctrl_t *e_ctrl,

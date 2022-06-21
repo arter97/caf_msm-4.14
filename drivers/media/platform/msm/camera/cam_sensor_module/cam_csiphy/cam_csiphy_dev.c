@@ -38,6 +38,25 @@ static long cam_csiphy_subdev_ioctl(struct v4l2_subdev *sd,
 	return rc;
 }
 
+static int cam_csiphy_subdev_open(struct v4l2_subdev *sd,
+	struct v4l2_subdev_fh *fh)
+{
+	struct csiphy_device *csiphy_dev =
+		v4l2_get_subdevdata(sd);
+
+	if (!csiphy_dev) {
+		CAM_ERR(CAM_CSIPHY, "csiphy_dev ptr is NULL");
+		return -EINVAL;
+	}
+
+	mutex_lock(&csiphy_dev->mutex);
+	csiphy_dev->open_cnt++;
+	CAM_DBG(CAM_CSIPHY, "csiphy_dev open count %d", csiphy_dev->open_cnt);
+	mutex_unlock(&csiphy_dev->mutex);
+
+	return 0;
+}
+
 static int cam_csiphy_subdev_close(struct v4l2_subdev *sd,
 	struct v4l2_subdev_fh *fh)
 {
@@ -50,7 +69,14 @@ static int cam_csiphy_subdev_close(struct v4l2_subdev *sd,
 	}
 
 	mutex_lock(&csiphy_dev->mutex);
-	cam_csiphy_shutdown(csiphy_dev);
+	if (csiphy_dev->open_cnt <= 0) {
+		mutex_unlock(&csiphy_dev->mutex);
+		return -EINVAL;
+	}
+	csiphy_dev->open_cnt--;
+	CAM_DBG(CAM_CSIPHY, "csiphy_dev open count %d", csiphy_dev->open_cnt);
+	if (csiphy_dev->open_cnt == 0)
+		cam_csiphy_shutdown(csiphy_dev);
 	mutex_unlock(&csiphy_dev->mutex);
 
 	return 0;
@@ -108,6 +134,7 @@ static const struct v4l2_subdev_ops csiphy_subdev_ops = {
 };
 
 static const struct v4l2_subdev_internal_ops csiphy_subdev_intern_ops = {
+	.open  = cam_csiphy_subdev_open,
 	.close = cam_csiphy_subdev_close,
 };
 
@@ -178,6 +205,7 @@ static int32_t cam_csiphy_platform_probe(struct platform_device *pdev)
 	new_csiphy_dev->acquire_count = 0;
 	new_csiphy_dev->start_dev_count = 0;
 	new_csiphy_dev->is_acquired_dev_combo_mode = 0;
+	new_csiphy_dev->open_cnt = 0;
 
 	cpas_parms.cam_cpas_client_cb = NULL;
 	cpas_parms.cell_index = new_csiphy_dev->soc_info.index;

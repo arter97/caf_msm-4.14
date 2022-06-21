@@ -140,6 +140,7 @@ static int cam_req_mgr_open(struct file *filep)
 	spin_unlock_bh(&g_dev.cam_eventq_lock);
 
 	g_dev.open_cnt++;
+	CAM_DBG(CAM_CRM, " CRM open cnt %d", g_dev.open_cnt);
 	rc = cam_mem_mgr_init();
 	if (rc) {
 		g_dev.open_cnt--;
@@ -191,6 +192,13 @@ static int cam_req_mgr_close(struct file *filep)
 		return -EINVAL;
 	}
 
+	g_dev.open_cnt--;
+	CAM_DBG(CAM_CRM, "CRM open_cnt %d", g_dev.open_cnt);
+
+	if (g_dev.open_cnt > 0) {
+		mutex_unlock(&g_dev.cam_lock);
+		return 0;
+	}
 	cam_req_mgr_handle_core_shutdown();
 
 	list_for_each_entry(sd, &g_dev.v4l2_dev->subdevs, list) {
@@ -203,7 +211,6 @@ static int cam_req_mgr_close(struct file *filep)
 		}
 	}
 
-	g_dev.open_cnt--;
 	v4l2_fh_release(filep);
 
 	spin_lock_bh(&g_dev.cam_eventq_lock);
