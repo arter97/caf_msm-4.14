@@ -216,5 +216,7 @@
 #define GCC_USB20_SEC_BCR			11
 #define GCC_USB3_PHY_PRIM_SP0_BCR		12
 #define GCC_USB3PHY_PHY_PRIM_SP0_BCR		13
+#define GCC_SDCC1_BCR				14
+#define GCC_SDCC2_BCR				15
 
 #endif
