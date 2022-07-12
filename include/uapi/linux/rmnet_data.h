@@ -230,4 +230,10 @@ enum rmnet_config_return_codes_e {
 	RMNET_CONFIG_TC_HANDLE_FULL
 };
 
+enum rmnet_v2x_call_type {
+       RMNET_V2X_IP_CALL,
+       RMNET_V2X_NON_IP_CALL,
+       RMNET_V2X_CALL_TYPE_MAX,
+};
+
 #endif /* _RMNET_DATA_H_ */
