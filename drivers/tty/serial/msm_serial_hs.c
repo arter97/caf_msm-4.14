@@ -1443,8 +1443,9 @@ static void msm_hs_submit_tx_locked(struct uart_port *uport)
 	sps_pipe_handle = tx->cons.pipe_handle;
 
 	/* Set 1 second timeout */
-	mod_timer(&tx->tx_timeout_timer,
-		jiffies + msecs_to_jiffies(MSEC_PER_SEC));
+	if (&tx->tx_timeout_timer != NULL)
+		mod_timer(&tx->tx_timeout_timer,
+			jiffies + msecs_to_jiffies(MSEC_PER_SEC));
 	/* Queue transfer request to SPS */
 	ret = sps_transfer_one(sps_pipe_handle, src_addr, tx_count,
 				msm_uport, flags);
