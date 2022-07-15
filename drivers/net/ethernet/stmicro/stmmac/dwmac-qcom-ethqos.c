@@ -2701,7 +2701,7 @@ inline bool qcom_ethqos_is_phy_link_up(struct qcom_ethqos *ethqos)
 	 */
 	struct stmmac_priv *priv = qcom_ethqos_get_priv(ethqos);
 
-	if (priv->plat->mac2mac_en) {
+	if (priv->plat->mac2mac_en || priv->plat->switch_mdio) {
 		return priv->plat->mac2mac_link;
 	} else {
 		return ((priv->oldlink != -1) &&
@@ -3727,6 +3727,9 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 	else
 		ETHQOSINFO("mac2mac rgmii speed = %d\n",
 			   plat_dat->mac2mac_rgmii_speed);
+
+	/* switch_mdio flag is for mac2mac with mdio access */
+	plat_dat->switch_mdio = of_property_read_bool(np, "switch_mdio");
 
 	if (of_property_read_bool(pdev->dev.of_node, "qcom,arm-smmu")) {
 		stmmac_emb_smmu_ctx.pdev_master = pdev;

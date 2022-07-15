@@ -206,6 +206,7 @@ struct plat_stmmacenet_data {
 	int mac2mac_rgmii_speed;
 	int mac2mac_link;
 	bool mac2mac_en;
+	bool switch_mdio;
 	unsigned int jumbo_mtu;
 };
 #endif
