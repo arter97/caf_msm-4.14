@@ -1555,8 +1555,9 @@ static int subsys_backup_driver_probe(struct platform_device *pdev)
 	if (!backup_dev)
 		return -ENOMEM;
 
-	if (of_property_read_u32(pdev->dev.of_node, "qcom,buf-size",
-			&buf_size)) {
+	ret = of_property_read_u32(pdev->dev.of_node, "qcom,buf-size",
+                        &buf_size);
+	if (ret) {
 		dev_err(&pdev->dev, "Could not find property qcom,buf-size\n");
 		goto buf_size_err;
 	}
