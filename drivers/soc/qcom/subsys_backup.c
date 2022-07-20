@@ -895,7 +895,7 @@ static int restore_notify_remote(struct subsys_backup *backup_dev,
 	struct qmi_restore_mem_ready_req *req;
 	struct qmi_restore_mem_ready_resp *resp;
 	struct qmi_restore_mem_ready_type *data;
-	int ret;
+	int ret = 0;
 
 	req = devm_kzalloc(backup_dev->dev,
 			sizeof(struct qmi_restore_mem_ready_req),
