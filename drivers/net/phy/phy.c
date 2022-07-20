@@ -885,6 +885,7 @@ void phy_state_machine(struct work_struct *work)
 	enum phy_state old_state;
 	int err = 0;
 	int old_link;
+	int old_speed;
 
 	mutex_lock(&phydev->lock);
 
@@ -973,11 +974,15 @@ void phy_state_machine(struct work_struct *work)
 		 */
 		if (phydev->irq == PHY_POLL) {
 			old_link = phydev->link;
+			old_speed = phydev->speed;
 			err = phy_read_status(phydev);
 			if (err)
 				break;
 
 			if (old_link != phydev->link)
+				phydev->state = PHY_CHANGELINK;
+
+			if (old_speed != phydev->speed)
 				phydev->state = PHY_CHANGELINK;
 		}
 		/*
