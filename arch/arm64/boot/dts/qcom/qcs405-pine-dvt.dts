@@ -69,8 +69,25 @@
 	/delete-property/ extcon;
 };
 
+&usb3_extcon {
+	/delete-property/ vbus-gpio;
+
+	pinctrl-0 = <&usb3_id_det_default
+		     &usb3_vbus_boost_default>;
+};
+
+&soc {
+	usb2_extcon: usb2_extcon {
+		compatible = "linux,extcon-usb-gpio";
+		vbus-gpio = <&pms405_gpios 12 GPIO_ACTIVE_HIGH>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&usb3_vbus_det_default>;
+	};
+};
+
 &usb2s {
-	qcom,charging-disabled;
+	extcon = <&usb2_extcon>;
 };
 
 &qcs405_snd {
