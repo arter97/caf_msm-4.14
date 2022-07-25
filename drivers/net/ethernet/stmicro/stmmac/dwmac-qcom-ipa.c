@@ -2115,7 +2115,7 @@ static ssize_t dma_stats_display(struct file *file, char __user *user_buf,
 	struct qcom_ethqos *ethqos = file->private_data;
 	struct ethqos_prv_ipa_data *eth_ipa = &eth_ipa_ctx;
 	struct ethqos_ipa_stats *dma_stats;
-	ssize_t ret_cnt;
+	ssize_t ret_cnt = 0;
 	u8 qinx = 0;
 	unsigned int len = *plen;
 
