@@ -26,9 +26,10 @@
 
 &soc {
 	mtp_batterydata: qcom,battery-data {
-		qcom,batt-id-range-pct = <15>;
+		qcom,batt-id-range-pct = <30>;
 		#include "qg-batterydata-ascent-3450mah.dtsi"
 		#include "qg-batterydata-mlp356477-2800mah.dtsi"
+		#include "qg-batterydata-Arima-5950mAh.dtsi"
 	};
 };
 
@@ -140,15 +141,25 @@
 	qcom,hold-soc-while-full;
 	qcom,linearize-soc;
 	qcom,qg-use-s7-ocv;
+	io-channels = <&pmi632_vadc ADC_BAT_THERM_PU1>,
+		      <&pmi632_vadc ADC_BAT_ID_PU2>;
+};
+
+&rpm_bus {
+	rpm-regulator-ldoa12 {
+		qcom,hpm-min-load = <0>;
+		regulator-l12 {
+			regulator-always-on;
+		};
+	};
 };
 
 &pmi632_charger {
 	qcom,battery-data = <&mtp_batterydata>;
 	qcom,suspend-input-on-debug-batt;
 	qcom,sw-jeita-enable;
-	qcom,step-charging-enable;
 	/* SMB1355 only */
-	qcom,sec-charger-config = <2>;
+	qcom,sec-charger-config = <0>;
 	dpdm-supply = <&qusb_phy0>;
 	qcom,charger-temp-max = <800>;
 	qcom,smb-temp-max = <800>;
@@ -160,6 +171,12 @@
 	qcom,float-option = <1>;
 	qcom,thermal-mitigation = <3000000 2500000
 			2000000 1500000 1000000 500000>;
+	qcom,aicl-disable;
+	qcom,dcin_uusb_over_gpio_en;
+	qcom,micro-usb-gpio = <&tlmm 132 0>;
+	qcom,dc-9v-gpio = <&tlmm 80 0>;
+	qcom,usb-switch-gpio = <&tlmm 14 0>;
+	qcom,usb-hub-33v-en-gpio = <&tlmm 113 0>;
 };
 
 &usb0 {
