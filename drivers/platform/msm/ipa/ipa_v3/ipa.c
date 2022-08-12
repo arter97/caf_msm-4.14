@@ -6164,7 +6164,13 @@ static int ipa3_panic_notifier(struct notifier_block *this,
 {
 	int res;
 
-	if (ipa3_ctx && ipa3_ctx->is_device_crashed)
+	if (!ipa3_ctx)
+	{
+		IPAERR("ipa3_ctx was not initialized\n");
+		return NOTIFY_DONE;
+	}
+
+	if (ipa3_ctx->is_device_crashed)
 		return NOTIFY_DONE;
 	ipa3_ctx->is_device_crashed = true;
 
