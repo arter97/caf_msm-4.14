@@ -3455,7 +3455,8 @@ void ethqos_ipa_offload_event_handler(void *data,
 			break;
 
 		/* Link up event is expected only after link down */
-		if (eth_ipa_ctx.ipa_offload_link_down) {
+		if (eth_ipa_ctx.ipa_offload_link_down &&
+				eth_ipa_ctx.ipa_debugfs_exists) {
 			for (type = 0; type < IPA_QUEUE_MAX; type++)
 				ethqos_ipa_offload_resume(eth_ipa_ctx.ethqos,
 							  type, false);
