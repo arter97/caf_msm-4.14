@@ -1728,6 +1728,8 @@ static irqreturn_t i2c_msm_qup_isr(int irq, void *devid)
 	bool log_event       = false;
 	bool signal_complete = false;
 	bool need_wmb        = false;
+	u32 state = 0;
+	u16 temp_cnt = 0;
 
 	i2c_msm_prof_evnt_add(ctrl, MSM_PROF, I2C_MSM_IRQ_BGN, irq, 0, 0);
 
@@ -1797,13 +1799,24 @@ static irqreturn_t i2c_msm_qup_isr(int irq, void *devid)
 	if (ctrl->xfer.err) {
 		/* Flush for the tags in case of an error and DMA Mode*/
 		if (ctrl->xfer.mode_id == I2C_MSM_XFER_MODE_DMA) {
-			writel_relaxed(QUP_I2C_FLUSH, ctrl->rsrcs.base
-								+ QUP_STATE);
+			i2c_msm_dbg(ctrl, MSM_DBG, "%s: Err:%d\n",
+						__func__, ctrl->xfer.err);
+			writel_relaxed(QUP_I2C_FLUSH | QUP_STATE_RUN,
+						ctrl->rsrcs.base + QUP_STATE);
 			/*
 			 * Ensure that QUP_I2C_FLUSH is written before
 			 * State reset
 			 */
 			wmb();
+			udelay(100);
+			state = readl_relaxed(ctrl->rsrcs.base + QUP_STATE);
+			while (!(state & QUP_I2C_FLUSH)) {
+				state =
+				readl_relaxed(ctrl->rsrcs.base + QUP_STATE);
+				udelay(50);
+				if (++temp_cnt >= 500)
+					break;
+			}
 		}
 
 		/* HW workaround: when interrupt is level triggerd, more
@@ -2022,8 +2035,8 @@ static int i2c_msm_qup_post_xfer(struct i2c_msm_ctrl *ctrl, int err)
 	if (ctrl->xfer.err & I2C_MSM_ERR_TIMEOUT) {
 		/* Flush for the DMA registers */
 		if (ctrl->xfer.mode_id == I2C_MSM_XFER_MODE_DMA)
-			writel_relaxed(QUP_I2C_FLUSH, ctrl->rsrcs.base
-								+ QUP_STATE);
+			writel_relaxed(QUP_I2C_FLUSH | QUP_STATE_RUN,
+						ctrl->rsrcs.base + QUP_STATE);
 
 		/* reset the qup core */
 		i2c_msm_qup_state_set(ctrl, QUP_STATE_RESET);
