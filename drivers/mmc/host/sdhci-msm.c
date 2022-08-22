@@ -3,6 +3,7 @@
  * driver source file
  *
  * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -267,6 +268,40 @@ struct sdhci_msm_offset sdhci_msm_offset_mci_present = {
 	.CORE_DDR_CONFIG_OLD = 0x1B8, /* Applicable to sdcc minor ver < 0x49 */
 	.CORE_DDR_CONFIG = 0x1BC,
 };
+
+u32 sdhci_msm_major_version(struct cmdq_host *host)
+{
+	void __iomem *base_addr;
+	u32 version = 0xffffffff;
+	u32 major = 0xffffffff;
+	u32 offset = SDCC_REG_IP_CATALOG;
+	struct sdhci_host *sdhci = NULL;
+	struct sdhci_pltfm_host *pltfm_host = NULL;
+	struct sdhci_msm_host *msm_host = NULL;
+
+	if (!host) {
+		pr_err("cmdq_host cannot be NULL");
+		goto exit;
+	}
+
+	sdhci = mmc_priv(host->mmc);
+	pltfm_host = sdhci_priv(sdhci);
+	msm_host = pltfm_host->priv;
+
+	if (msm_host->mci_removed)
+		base_addr = sdhci->ioaddr;
+	else
+		base_addr = msm_host->core_mem;
+
+	version = readl_relaxed(base_addr + offset);
+
+	major = (version & SDHCI_CTRLLR_MAJOR_VER_MASK)
+		>> SDHCI_CTRLLR_MAJOR_VER_SHIFT;
+
+exit:
+	return major;
+}
+EXPORT_SYMBOL(sdhci_msm_major_version);
 
 u8 sdhci_msm_readb_relaxed(struct sdhci_host *host, u32 offset)
 {
