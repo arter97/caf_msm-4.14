@@ -2115,7 +2115,7 @@ static ssize_t dma_stats_display(struct file *file, char __user *user_buf,
 	struct qcom_ethqos *ethqos = file->private_data;
 	struct ethqos_prv_ipa_data *eth_ipa = &eth_ipa_ctx;
 	struct ethqos_ipa_stats *dma_stats;
-	ssize_t ret_cnt;
+	ssize_t ret_cnt = 0;
 	u8 qinx = 0;
 	unsigned int len = *plen;
 
@@ -2852,10 +2852,14 @@ static int ethqos_ipa_cv2x_offload_suspend(struct qcom_ethqos *ethqos,
 			eth_ipa_queue_type_to_tx_client(type);
 		profile.proto =
 			eth_ipa_queue_type_to_proto(type);
-		ret = ipa_set_perf_profile(&profile);
-		if (ret)
-			ETHQOSERR("%s: Err set BW for TX %d\n",
-				  __func__, ret);
+		if (profile.proto < IPA_UC_MAX_PROT_SIZE) {
+			ret = ipa_set_perf_profile(&profile);
+			if (ret)
+				ETHQOSERR("%s: Err set BW for TX %d\n",
+					__func__, ret);
+		}
+		else
+			ETHQOSERR("%s: Err set IPA proto \n",__func__);
 	}
 
 	if (eth_ipa_ctx.ipa_offload_init_cv2x && !user_suspend) {
@@ -2916,9 +2920,13 @@ static int ethqos_ipa_cv2x_offload_resume(struct qcom_ethqos *ethqos,
 	profile.max_supported_bw_mbps = ethqos->speed;
 	profile.client = eth_ipa_queue_type_to_tx_client(type);
 	profile.proto =  eth_ipa_queue_type_to_proto(type);
-	ret = ipa_set_perf_profile(&profile);
-	if (ret)
-		ETHQOSERR("%s: Err set BW for TX: %d\n", __func__, ret);
+	if (profile.proto < IPA_UC_MAX_PROT_SIZE) {
+		ret = ipa_set_perf_profile(&profile);
+		if (ret)
+			ETHQOSERR("%s: Err set BW for TX: %d\n", __func__, ret);
+	}
+	else
+		ETHQOSERR("%s: Err set IPA proto \n",__func__);
 
 	/*Initialize DMA CHs for offload*/
 	ethqos_init_offload(ethqos, type);
@@ -3447,7 +3455,8 @@ void ethqos_ipa_offload_event_handler(void *data,
 			break;
 
 		/* Link up event is expected only after link down */
-		if (eth_ipa_ctx.ipa_offload_link_down) {
+		if (eth_ipa_ctx.ipa_offload_link_down &&
+				eth_ipa_ctx.ipa_debugfs_exists) {
 			for (type = 0; type < IPA_QUEUE_MAX; type++)
 				ethqos_ipa_offload_resume(eth_ipa_ctx.ethqos,
 							  type, false);

@@ -1,4 +1,5 @@
 /* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -382,6 +383,7 @@ static int rmnet_changelink(struct net_device *dev, struct nlattr *tb[],
 	struct net_device *real_dev;
 	struct rmnet_endpoint *ep;
 	struct rmnet_port *port;
+	void *qos;
 	u16 mux_id;
 
 	real_dev = __dev_get_by_index(dev_net(dev),
@@ -403,6 +405,8 @@ static int rmnet_changelink(struct net_device *dev, struct nlattr *tb[],
 
 		ep->mux_id = mux_id;
 		priv->mux_id = mux_id;
+		qos = rcu_dereference(priv->qos_info);
+		qmi_rmnet_change_mux_id(qos, mux_id);
 	}
 
 	if (data[IFLA_RMNET_FLAGS]) {

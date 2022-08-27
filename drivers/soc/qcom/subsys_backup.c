@@ -895,7 +895,7 @@ static int restore_notify_remote(struct subsys_backup *backup_dev,
 	struct qmi_restore_mem_ready_req *req;
 	struct qmi_restore_mem_ready_resp *resp;
 	struct qmi_restore_mem_ready_type *data;
-	int ret;
+	int ret = 0;
 
 	req = devm_kzalloc(backup_dev->dev,
 			sizeof(struct qmi_restore_mem_ready_req),
@@ -1555,8 +1555,9 @@ static int subsys_backup_driver_probe(struct platform_device *pdev)
 	if (!backup_dev)
 		return -ENOMEM;
 
-	if (of_property_read_u32(pdev->dev.of_node, "qcom,buf-size",
-			&buf_size)) {
+	ret = of_property_read_u32(pdev->dev.of_node, "qcom,buf-size",
+                        &buf_size);
+	if (ret) {
 		dev_err(&pdev->dev, "Could not find property qcom,buf-size\n");
 		goto buf_size_err;
 	}

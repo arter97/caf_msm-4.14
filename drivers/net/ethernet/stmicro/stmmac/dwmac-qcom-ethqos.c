@@ -3745,14 +3745,13 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 
 	qcom_ethqos_get_bus_config(pdev);
 
-	if (emac_bus_scale_vec)
+	if (emac_bus_scale_vec) {
 		ethqos->bus_scale_vec = emac_bus_scale_vec;
-
-	ethqos->bus_hdl = msm_bus_scale_register_client(ethqos->bus_scale_vec);
-
-	if (!ethqos->bus_hdl) {
-		ETHQOSERR("unable to register for bus\n");
-		msm_bus_cl_clear_pdata(emac_bus_scale_vec);
+		ethqos->bus_hdl = msm_bus_scale_register_client(ethqos->bus_scale_vec);
+		if (!ethqos->bus_hdl) {
+			ETHQOSERR("unable to register for bus\n");
+			msm_bus_cl_clear_pdata(emac_bus_scale_vec);
+		}
 	}
 
 	ethqos->rgmii_clk_rate =  RGMII_ID_MODE_10_LOW_SVS_CLK_FREQ;

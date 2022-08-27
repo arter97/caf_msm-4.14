@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1033,6 +1034,17 @@ void *qmi_rmnet_qos_init(struct net_device *real_dev,
 	return qos;
 }
 EXPORT_SYMBOL(qmi_rmnet_qos_init);
+
+void qmi_rmnet_change_mux_id(void *qos, u8 mux_id)
+{
+	struct qos_info *qosi = (struct qos_info *)qos;
+	if (qosi) {
+		spin_lock_bh(&qosi->qos_lock);
+		qosi->mux_id = mux_id;
+		spin_unlock_bh(&qosi->qos_lock);
+	}
+	return;
+}
 
 void qmi_rmnet_qos_exit_pre(void *qos)
 {
