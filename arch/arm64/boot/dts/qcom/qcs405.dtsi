@@ -1933,7 +1933,7 @@
 		label = "gpio-keys";
 		input-name = "gpio-keys";
 		pinctrl-names = "default";
-		pinctrl-0 = <&tlmm_gpio_key_active>;
+		pinctrl-0 = <&tlmm_gpio_key_active &mdss_rgb_data_g7_suspend>;
 
 		vol_mute {
 			label = "vol_mute";

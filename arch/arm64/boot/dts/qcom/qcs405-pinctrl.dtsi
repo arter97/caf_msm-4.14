@@ -1598,6 +1598,34 @@
 			};
 		};
 
+                mdss_rgb_data_g7_active: mdss_rgb_data_g7_active {
+                        mux {
+                                pins = "gpio79";
+                                function = "gpio";
+                        };
+
+                        config {
+                                pins = "gpio79";
+                                drive-strength = <10>;
+                                bias-pull-up;
+                                output-high;
+                        };
+                };
+
+                mdss_rgb_data_g7_suspend: mdss_rgb_data_g7_suspend {
+                        mux {
+                                pins = "gpio79";
+                                function = "gpio";
+                        };
+
+                        config {
+                                pins = "gpio79";
+                                drive-strength = <2>;
+                                bias-pull-down;
+                                input-enable;
+                        };
+                };
+
 		/* SMB CONFIGURATION */
 		smb_stat: smb_stat {
 			mux {
