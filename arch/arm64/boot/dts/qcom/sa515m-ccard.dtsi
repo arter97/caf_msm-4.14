@@ -426,6 +426,11 @@
 	status = "disabled";
 };
 
+&pcie0 {
+	qcom,no-l1-supported;
+	qcom,no-l1ss-supported;
+};
+
 &soc {
 	cnss_pcie: qcom,cnss-qca-converged{
 		compatible = "qcom,cnss-qca-converged";
