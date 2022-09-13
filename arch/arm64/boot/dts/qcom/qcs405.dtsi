@@ -1549,7 +1549,7 @@
 		qcom,target-dev = <&cpu0_cpu_ddr_latfloor>;
 		qcom,core-dev-table =
 			< 1094400 MHZ_TO_MBPS( 297, 8) >,
-			< 1248000 MHZ_TO_MBPS( 597, 8) >,
+			< 1248000 MHZ_TO_MBPS( 595, 8) >,
 			< 1401600 MHZ_TO_MBPS( 710, 8) >;
 	};
 

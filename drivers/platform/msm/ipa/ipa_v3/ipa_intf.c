@@ -1,5 +1,5 @@
 /* Copyright (c) 2013-2019, 2021, The Linux Foundation. All rights reserved.
- *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
  * only version 2 as published by the Free Software Foundation.
@@ -387,12 +387,32 @@ static void ipa3_send_msg_free(void *buff, u32 len, u32 type)
 	kfree(buff);
 }
 
+static void wlan_ex_conn_mac_print(void *buff)
+{
+	struct ipa_wlan_msg_ex *event_ex_cur_con = buff;
+	int cnt = 0;
+
+	for (cnt = 0; cnt < event_ex_cur_con->num_of_attribs; cnt++) {
+		if (event_ex_cur_con->attribs[cnt].attrib_type ==
+				WLAN_HDR_ATTRIB_MAC_ADDR) {
+			IPADBG("%02x:%02x:%02x:%02x:%02x:%02x\n",
+				event_ex_cur_con->attribs[cnt].u.mac_addr[0],
+				event_ex_cur_con->attribs[cnt].u.mac_addr[1],
+				event_ex_cur_con->attribs[cnt].u.mac_addr[2],
+				event_ex_cur_con->attribs[cnt].u.mac_addr[3],
+				event_ex_cur_con->attribs[cnt].u.mac_addr[4],
+				event_ex_cur_con->attribs[cnt].u.mac_addr[5]);
+		}
+	}
+
+}
+
 static int wlan_msg_process(struct ipa_msg_meta *meta, void *buff)
 {
 	struct ipa3_push_msg *msg_dup;
-	struct ipa_wlan_msg_ex *event_ex_cur_con = NULL;
 	struct ipa_wlan_msg_ex *event_ex_list = NULL;
 	struct ipa_wlan_msg *event_ex_cur_discon = NULL;
+	struct ipa_wlan_msg *event_cur_con = NULL;
 	void *data_dup = NULL;
 	struct ipa3_push_msg *entry;
 	struct ipa3_push_msg *next;
@@ -403,20 +423,19 @@ static int wlan_msg_process(struct ipa_msg_meta *meta, void *buff)
 	if (!buff)
 		return -EINVAL;
 	if (WLAN_IPA_CONNECT_EVENT(meta->msg_type)) {
-		/* debug print */
-		event_ex_cur_con = buff;
-		for (cnt = 0; cnt < event_ex_cur_con->num_of_attribs; cnt++) {
-			if (event_ex_cur_con->attribs[cnt].attrib_type ==
-				WLAN_HDR_ATTRIB_MAC_ADDR) {
-				IPADBG("%02x:%02x:%02x:%02x:%02x:%02x,(%d)\n",
-				event_ex_cur_con->attribs[cnt].u.mac_addr[0],
-				event_ex_cur_con->attribs[cnt].u.mac_addr[1],
-				event_ex_cur_con->attribs[cnt].u.mac_addr[2],
-				event_ex_cur_con->attribs[cnt].u.mac_addr[3],
-				event_ex_cur_con->attribs[cnt].u.mac_addr[4],
-				event_ex_cur_con->attribs[cnt].u.mac_addr[5],
-				meta->msg_type);
-			}
+		if (meta->msg_type == WLAN_CLIENT_CONNECT_EX) {
+			/* debug print */
+			wlan_ex_conn_mac_print(buff);
+		} else {
+			event_cur_con = buff;
+			IPADBG("%02x:%02x:%02x:%02x:%02x:%02x,(%d)\n",
+					event_cur_con->mac_addr[0],
+					event_cur_con->mac_addr[1],
+					event_cur_con->mac_addr[2],
+					event_cur_con->mac_addr[3],
+					event_cur_con->mac_addr[4],
+					event_cur_con->mac_addr[5],
+					meta->msg_type);
 		}
 
 		mutex_lock(&ipa3_ctx->msg_wlan_client_lock);
@@ -650,6 +669,7 @@ int ipa3_resend_wlan_msg(void)
 	struct ipa_wlan_msg_ex *event_ex_list = NULL;
 	struct ipa3_push_msg *entry;
 	struct ipa3_push_msg *next;
+	struct ipa_msg_meta *meta;
 	int cnt = 0, total = 0;
 	struct ipa3_push_msg *msg;
 	void *data = NULL;
@@ -660,12 +680,16 @@ int ipa3_resend_wlan_msg(void)
 	list_for_each_entry_safe(entry, next, &ipa3_ctx->msg_wlan_client_list,
 			link) {
 
-		event_ex_list = entry->buff;
-		for (cnt = 0; cnt < event_ex_list->num_of_attribs; cnt++) {
-			if (event_ex_list->attribs[cnt].attrib_type ==
-				WLAN_HDR_ATTRIB_MAC_ADDR) {
-				IPADBG("%d-Mac %pM\n", total,
-				event_ex_list->attribs[cnt].u.mac_addr);
+		meta = &entry->meta;
+		if (meta->msg_type == WLAN_CLIENT_CONNECT_EX) {
+			event_ex_list = entry->buff;
+			for (cnt = 0; cnt < event_ex_list->num_of_attribs;
+					cnt++) {
+				if (event_ex_list->attribs[cnt].attrib_type ==
+						WLAN_HDR_ATTRIB_MAC_ADDR) {
+					IPADBG("%d-Mac %pM\n", total,
+					event_ex_list->attribs[cnt].u.mac_addr);
+				}
 			}
 		}
 
