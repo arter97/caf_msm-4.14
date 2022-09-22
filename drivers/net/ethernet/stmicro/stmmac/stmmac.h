@@ -176,6 +176,16 @@ struct stmmac_priv {
 #endif
 	bool hw_offload_enabled;
 	bool en_wol;
+	unsigned long state;
+	struct workqueue_struct *wq;
+	struct work_struct service_task;
+};
+
+enum stmmac_state {
+	STMMAC_DOWN,
+	STMMAC_RESET_REQUESTED,
+	STMMAC_RESETING,
+	STMMAC_SERVICE_SCHED,
 };
 
 struct stmmac_emb_smmu_cb_ctx {
