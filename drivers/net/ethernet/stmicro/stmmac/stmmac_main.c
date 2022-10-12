@@ -1230,7 +1230,7 @@ static void stmmac_clear_tx_descriptors(struct stmmac_priv *priv, u32 queue)
 	int i;
 
 	/* Clear the TX descriptors */
-	for (i = 0; i < tx_q->dma_tx_desc_sz; i++)
+	for (i = 0; i < tx_q->dma_tx_desc_sz; i++) {
 		if (priv->extend_desc)
 			priv->hw->desc->init_tx_desc(
 				&tx_q->dma_etx[i].basic,
@@ -1241,6 +1241,30 @@ static void stmmac_clear_tx_descriptors(struct stmmac_priv *priv, u32 queue)
 				&tx_q->dma_tx[i],
 				priv->mode,
 				(i == tx_q->dma_tx_desc_sz - 1));
+
+		if ((tx_q->tx_skbuff_dma[i].buf)) {
+			if (tx_q->tx_skbuff_dma[i].map_as_page)
+				dma_unmap_page(GET_MEM_PDEV_DEV,
+					       tx_q->tx_skbuff_dma[i].buf,
+					       tx_q->tx_skbuff_dma[i].len,
+					       DMA_TO_DEVICE);
+			else
+				dma_unmap_single(GET_MEM_PDEV_DEV,
+						 tx_q->tx_skbuff_dma[i].buf,
+						 tx_q->tx_skbuff_dma[i].len,
+						 DMA_TO_DEVICE);
+
+			if (tx_q->tx_skbuff[i]) {
+				dev_kfree_skb_any(tx_q->tx_skbuff[i]);
+				tx_q->tx_skbuff[i] = NULL;
+			}
+			tx_q->tx_skbuff_dma[i].buf = 0;
+			tx_q->tx_skbuff_dma[i].len = 0;
+			tx_q->tx_skbuff_dma[i].map_as_page = false;
+		}
+
+		tx_q->tx_skbuff_dma[i].last_segment = false;
+	}
 }
 
 /**
