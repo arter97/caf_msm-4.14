@@ -1,4 +1,5 @@
 /* Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -313,6 +314,8 @@ static void ipa3_del_mux_qmap_hdrs(void)
 	int index;
 
 	for (index = 0; index < rmnet_ipa3_ctx->rmnet_index; index++) {
+		if (rmnet_ipa3_ctx->mux_channel[index].hdr_hdl == 0)
+			continue;
 		ipa3_del_qmap_hdr(rmnet_ipa3_ctx->mux_channel[index].hdr_hdl);
 		rmnet_ipa3_ctx->mux_channel[index].hdr_hdl = 0;
 	}
@@ -895,6 +898,17 @@ static int find_vchannel_name_index(const char *vchannel_name)
 	return MAX_NUM_OF_MUX_CHANNEL;
 }
 
+
+static int ipa3_find_free_rmnet_index( )
+{
+	int i;
+
+	for (i = 0; i < rmnet_ipa3_ctx->rmnet_index; i++) {
+		if (rmnet_ipa3_ctx->mux_channel[i].mux_hdr_set == false )
+			return i;
+	}
+	return MAX_NUM_OF_MUX_CHANNEL;
+}
 static enum ipa_upstream_type find_upstream_type(const char *upstreamIface)
 {
 	int i;
@@ -1810,7 +1824,7 @@ static int handle3_egress_format(struct net_device *dev,
 static int ipa3_wwan_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 {
 	int rc = 0;
-	int mru = 1000, epid = 1, mux_index, len;
+	int mru = 1000, epid = 1, mux_index, len ,free_index;
 	struct ipa_msg_meta msg_meta;
 	struct ipa_wan_msg *wan_msg = NULL;
 	struct rmnet_ioctl_extended_s ext_ioctl_data;
@@ -1999,13 +2013,15 @@ static int ipa3_wwan_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 			mux_id = ext_ioctl_data.u.rmnet_mux_val.mux_id;
 			mux_index = ipa3_find_mux_channel_index(
 				ext_ioctl_data.u.rmnet_mux_val.mux_id);
+			free_index = ipa3_find_free_rmnet_index();
 			if (mux_index < MAX_NUM_OF_MUX_CHANNEL) {
 				IPAWANDBG("already setup mux(%d)\n", mux_id);
 				return rc;
 			}
 			mutex_lock(&rmnet_ipa3_ctx->add_mux_channel_lock);
-			if (rmnet_ipa3_ctx->rmnet_index
-				>= MAX_NUM_OF_MUX_CHANNEL) {
+			if ((rmnet_ipa3_ctx->rmnet_index
+				>= MAX_NUM_OF_MUX_CHANNEL) &&
+			  	 (free_index ==  MAX_NUM_OF_MUX_CHANNEL)) {
 				IPAWANERR("Exceed mux_channel limit(%d)\n",
 				rmnet_ipa3_ctx->rmnet_index);
 				mutex_unlock(
@@ -2019,8 +2035,11 @@ static int ipa3_wwan_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 			ext_ioctl_data.u.rmnet_mux_val.vchannel_name);
 			/* cache the mux name and id */
 			mux_channel = rmnet_ipa3_ctx->mux_channel;
-			rmnet_index = rmnet_ipa3_ctx->rmnet_index;
-
+			if (free_index < MAX_NUM_OF_MUX_CHANNEL) {
+				rmnet_index = free_index;
+			} else {
+				rmnet_index = rmnet_ipa3_ctx->rmnet_index;
+			}
 			mux_channel[rmnet_index].mux_id =
 				ext_ioctl_data.u.rmnet_mux_val.mux_id;
 			memcpy(mux_channel[rmnet_index].vchannel_name,
@@ -2043,8 +2062,7 @@ static int ipa3_wwan_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 					&rmnet_ipa3_ctx->add_mux_channel_lock;
 				IPAWANERR_RL("dev(%s) register to IPA\n",
 					v_name);
-				rc = ipa3_wwan_register_to_ipa(
-						rmnet_ipa3_ctx->rmnet_index);
+				rc = ipa3_wwan_register_to_ipa(rmnet_index);
 				if (rc < 0) {
 					IPAWANERR("device %s reg IPA failed\n",
 						v_name);
@@ -2063,8 +2081,37 @@ static int ipa3_wwan_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 				mux_channel[rmnet_index].ul_flt_reg =
 					false;
 			}
-			rmnet_ipa3_ctx->rmnet_index++;
+			if ( free_index ==  MAX_NUM_OF_MUX_CHANNEL  )
+				rmnet_ipa3_ctx->rmnet_index++;
 			mutex_unlock(&rmnet_ipa3_ctx->add_mux_channel_lock);
+			break;
+		case RMNET_IOCTL_DEL_MUX_CHANNEL:
+			mux_id = ext_ioctl_data.u.rmnet_mux_val.mux_id;
+			mux_index = ipa3_find_mux_channel_index(
+				ext_ioctl_data.u.rmnet_mux_val.mux_id);
+			if (mux_index >= MAX_NUM_OF_MUX_CHANNEL  ) {
+				IPAWANDBG(" mux_id is not present (%d)\n", mux_id);
+				return -EFAULT;
+			}
+			mutex_lock(&rmnet_ipa3_ctx->add_mux_channel_lock);
+			mux_channel = rmnet_ipa3_ctx->mux_channel;
+			ipa3_del_qmap_hdr(mux_channel[mux_index].hdr_hdl);
+			IPAWANDBG("de-register device %s\n",
+				       	mux_channel[mux_index].vchannel_name);
+			rc = ipa3_deregister_intf(mux_channel[mux_index].vchannel_name);
+			if (rc < 0) {
+				IPAWANDBG("de-register device %s(%d) failed\n",
+					mux_channel[mux_index].vchannel_name,
+				       	rmnet_index);
+				mutex_unlock(
+					&rmnet_ipa3_ctx->add_mux_channel_lock);
+				return rc;
+			}
+
+			memset(&mux_channel[mux_index], 0,
+				       	sizeof(struct ipa3_rmnet_mux_val));
+			mutex_unlock(
+				&rmnet_ipa3_ctx->add_mux_channel_lock);
 			break;
 		case RMNET_IOCTL_SET_EGRESS_DATA_FORMAT:
 			rc = handle3_egress_format(dev, &ext_ioctl_data);
