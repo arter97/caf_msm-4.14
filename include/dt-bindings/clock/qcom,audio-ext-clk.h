@@ -1,4 +1,5 @@
 /* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,5 +26,6 @@
 #define AUDIO_LPASS_MCLK_7	8
 #define AUDIO_LPASS_CORE_HW_VOTE	9
 #define AUDIO_EXTERNAL_PLL	10
+#define AUDIO_LPASS_AUDIO_HW_VOTE	11
 
 #endif
