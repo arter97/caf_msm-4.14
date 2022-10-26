@@ -1076,6 +1076,7 @@ static int stmmac_init_phy(struct net_device *dev)
 	if (phydev->is_pseudo_fixed_link)
 		phydev->irq = PHY_POLL;
 
+#ifndef DEFER_ENABLE_INTERRUPTS
 	if (((phydev->phy_id & phydev->drv->phy_id_mask) == MICREL_PHY_ID) &&
 	    !priv->plat->phy_intr_en) {
 		ret = ethqos_phy_intr_enable(priv);
@@ -1099,6 +1100,7 @@ static int stmmac_init_phy(struct net_device *dev)
 		}
 	}
 	phy_attached_info(phydev);
+#endif
 	return 0;
 }
 
@@ -2834,6 +2836,7 @@ void stmmac_mac2mac_adjust_link(int speed, struct stmmac_priv *priv)
 static int stmmac_open(struct net_device *dev)
 {
 	struct stmmac_priv *priv = netdev_priv(dev);
+	struct phy_device *phydev = priv->phydev;
 	int ret;
 
 	if (priv->plat->update_ahb_clk_cfg)
@@ -2887,6 +2890,32 @@ static int stmmac_open(struct net_device *dev)
 
 	if (!priv->tx_coal_timer_disable)
 		stmmac_init_tx_coalesce(priv);
+
+#ifdef DEFER_ENABLE_INTERRUPTS
+		if (((phydev->phy_id & phydev->drv->phy_id_mask) == MICREL_PHY_ID) &&
+			!priv->plat->phy_intr_en) {
+			ret = ethqos_phy_intr_enable(priv);
+			if (ret)
+				pr_alert("qcom-ethqos: Unable to enable PHY interrupt\n");
+			els
+				priv->plat->phy_intr_en = true;
+		}
+
+		if (phy_intr_en) {
+			phydev->irq = PHY_IGNORE_INTERRUPT;
+			phydev->interrupts =  PHY_INTERRUPT_ENABLED;
+			if (phydev->drv->config_intr &&
+				!phydev->drv->config_intr(phydev)) {
+				pr_debug(" qcom-ethqos: %s config_phy_intr successful\n",
+					 __func__);
+				qcom_ethqos_request_phy_wol(priv->plat);
+			} else {
+				pr_alert("Unable to register PHY IRQ\n");
+				phydev->irq = PHY_POLL;
+			}
+		}
+		phy_attached_info(phydev);
+#endif
 
 	if (dev->phydev)
 		phy_start(dev->phydev);
