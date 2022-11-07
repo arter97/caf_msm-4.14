@@ -402,7 +402,7 @@
 	qcom,no-l1-supported;
 	qcom,no-l1ss-supported;
 	qcom,target-link-speed = <0x1>;
-}
+};
 
 &soc {
 	cnss_pcie: qcom,cnss-qca-converged{
