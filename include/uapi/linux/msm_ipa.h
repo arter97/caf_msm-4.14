@@ -2300,6 +2300,7 @@ enum ipa_l2tp_tunnel_type {
 #define IPA_L2TP_TUNNEL_UDP IPA_L2TP_TUNNEL_UDP
 };
 
+#define IPA_PEER_ADDR_ENABLED 1
 
 /**
  * struct ipa_ioc_l2tp_vlan_mapping_info - l2tp->vlan mapping info
@@ -2321,6 +2322,12 @@ struct ipa_ioc_l2tp_vlan_mapping_info {
 	uint16_t src_port;
 	uint16_t dst_port;
 	uint16_t mtu;
+	uint8_t is_peer_addr_updated;
+	union {
+		uint32_t peer_ipv6_addr[4];
+		uint32_t peer_ipv4_addr;
+	} addr;
+	uint8_t reserved;
 };
 
 /**
