@@ -909,6 +909,33 @@ static int ipa3_find_free_rmnet_index( )
 	}
 	return MAX_NUM_OF_MUX_CHANNEL;
 }
+
+static int del_mux_channel(int mux_index, int rmnet_index)
+{
+	int rc = 0;
+	struct ipa3_rmnet_mux_val *mux_channel;
+
+	if (mux_index >= MAX_NUM_OF_MUX_CHANNEL  ) {
+		IPAWANDBG("Invalid mux index\n");
+		return -EINVAL;
+	}
+	mutex_lock(&rmnet_ipa3_ctx->add_mux_channel_lock);
+	mux_channel = rmnet_ipa3_ctx->mux_channel;
+	ipa3_del_qmap_hdr(mux_channel[mux_index].hdr_hdl);
+	IPAWANDBG("de-register device %s\n",
+		mux_channel[mux_index].vchannel_name);
+
+	rc = ipa3_deregister_intf(mux_channel[mux_index].vchannel_name);
+	if (rc < 0) {
+		IPAWANDBG("de-register device %s(%d) failed\n",
+		mux_channel[mux_index].vchannel_name, rmnet_index);
+		mutex_unlock(&rmnet_ipa3_ctx->add_mux_channel_lock);
+		return rc;
+	}
+	memset(&mux_channel[mux_index], 0,
+		sizeof(struct ipa3_rmnet_mux_val));
+	mutex_unlock(&rmnet_ipa3_ctx->add_mux_channel_lock);
+}
 static enum ipa_upstream_type find_upstream_type(const char *upstreamIface)
 {
 	int i;
@@ -1824,7 +1851,7 @@ static int handle3_egress_format(struct net_device *dev,
 static int ipa3_wwan_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 {
 	int rc = 0;
-	int mru = 1000, epid = 1, mux_index, len ,free_index;
+	int mru = 1000, epid = 1, mux_index, len ,free_index, vchannel_index;
 	struct ipa_msg_meta msg_meta;
 	struct ipa_wan_msg *wan_msg = NULL;
 	struct rmnet_ioctl_extended_s ext_ioctl_data;
@@ -2093,25 +2120,32 @@ static int ipa3_wwan_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 				IPAWANDBG(" mux_id is not present (%d)\n", mux_id);
 				return -EFAULT;
 			}
-			mutex_lock(&rmnet_ipa3_ctx->add_mux_channel_lock);
-			mux_channel = rmnet_ipa3_ctx->mux_channel;
-			ipa3_del_qmap_hdr(mux_channel[mux_index].hdr_hdl);
-			IPAWANDBG("de-register device %s\n",
-				       	mux_channel[mux_index].vchannel_name);
-			rc = ipa3_deregister_intf(mux_channel[mux_index].vchannel_name);
-			if (rc < 0) {
-				IPAWANDBG("de-register device %s(%d) failed\n",
-					mux_channel[mux_index].vchannel_name,
-				       	rmnet_index);
-				mutex_unlock(
-					&rmnet_ipa3_ctx->add_mux_channel_lock);
+			rc = del_mux_channel(mux_index, rmnet_index);
+			if(rc < 0) {
+				IPAWANDBG("Mux channel deletion failed\n");
 				return rc;
 			}
-
-			memset(&mux_channel[mux_index], 0,
-				       	sizeof(struct ipa3_rmnet_mux_val));
-			mutex_unlock(
-				&rmnet_ipa3_ctx->add_mux_channel_lock);
+			break;
+		case RMNET_IOCTL_DEL_IFACE_MUX_CHANNEL:
+			v_name =
+				ext_ioctl_data.u.rmnet_mux_val.vchannel_name;
+			vchannel_index = find_vchannel_name_index(v_name);
+			if (vchannel_index == MAX_NUM_OF_MUX_CHANNEL) {
+				IPAWANERR("%s is an invalid iface name\n",
+						v_name);
+				return -EFAULT;
+			}
+			mux_id = rmnet_ipa3_ctx->mux_channel[vchannel_index].mux_id;
+			mux_index = ipa3_find_mux_channel_index(mux_id);
+			if (mux_index >= MAX_NUM_OF_MUX_CHANNEL  ) {
+				IPAWANDBG(" mux_id is not present (%d)\n", mux_id);
+				return -EFAULT;
+			}
+			rc = del_mux_channel(mux_index, rmnet_index);
+			if(rc < 0) {
+				IPAWANDBG("Mux channel deletion failed\n");
+				return rc;
+			}
 			break;
 		case RMNET_IOCTL_SET_EGRESS_DATA_FORMAT:
 			rc = handle3_egress_format(dev, &ext_ioctl_data);
