@@ -3619,6 +3619,8 @@ static void ffs_func_resume(struct usb_function *f)
 
 static int ffs_func_revmap_ep(struct ffs_function *func, u8 num)
 {
+	if( USB_ENDPOINT_NUMBER_MASK <= num)
+		return -EDOM;
 	num = func->eps_revmap[num & USB_ENDPOINT_NUMBER_MASK];
 	return num ? num : -EDOM;
 }
