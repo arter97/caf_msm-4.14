@@ -1795,8 +1795,13 @@ static int mhi_uci_ctrl_set_tiocm(struct uci_client *client,
 
 	reinit_completion(ctrl_client->write_done);
 	ret_val = mhi_uci_send_packet(ctrl_client, ctrl_msg, sizeof(*ctrl_msg));
-	if (ret_val != sizeof(*ctrl_msg))
+	if (ret_val != sizeof(*ctrl_msg)) {
+		uci_log(UCI_DBG_ERROR, ctrl_client->client_index,
+				"Failed to send ctrl msg\n");
+		kfree(ctrl_msg);
+		ctrl_msg = NULL;
 		goto tiocm_error;
+	}
 	compl_ret = wait_for_completion_interruptible_timeout(
 			ctrl_client->write_done,
 			MHI_UCI_ASYNC_WRITE_TIMEOUT);
@@ -1817,7 +1822,6 @@ static int mhi_uci_ctrl_set_tiocm(struct uci_client *client,
 	return 0;
 
 tiocm_error:
-	kfree(ctrl_msg);
 	return ret_val;
 }
 
