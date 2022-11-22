@@ -488,7 +488,8 @@ static void hdmi_tx_send_cable_notification(
 		struct hdmi_tx_ctrl *hdmi_ctrl, bool val)
 {
 	char name[HPD_STRING_SIZE], status[HPD_STRING_SIZE];
-	char *envp[3];
+	char event_type[HPD_STRING_SIZE];
+	char *envp[4];
 
 	if (!hdmi_ctrl) {
 		DEV_ERR("%s: invalid hdmi ctrl data\n", __func__);
@@ -506,11 +507,14 @@ static void hdmi_tx_send_cable_notification(
 	snprintf(name, HPD_STRING_SIZE, "name=%s", "HDMI");
 	snprintf(status, HPD_STRING_SIZE, "status=%s",
 			val ? "connected" : "disconnected");
+	snprintf(event_type, HPD_STRING_SIZE, "event_type=%s",
+			hdmi_ctrl->resume_notify ? "resume" : "normal");
 
-	pr_debug("[%s]:[%s]\n", name, status);
+	pr_debug("[%s]:[%s]:[%s]\n", name, status, event_type);
 	envp[0] = name;
 	envp[1] = status;
-	envp[2] = NULL;
+	envp[2] = event_type;
+	envp[3] = NULL;
 
 	kobject_uevent_env(hdmi_ctrl->kobj, KOBJ_CHANGE, envp);
 
