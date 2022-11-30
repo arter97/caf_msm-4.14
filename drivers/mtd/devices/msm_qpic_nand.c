@@ -914,7 +914,8 @@ static int msm_nand_flash_onfi_probe(struct msm_nand_info *info)
 
 	/* Lookup the partition to which apps has access to */
 	for (i = 0; i < FLASH_PTABLE_MAX_PARTS_V4; i++) {
-		if (mtd_part[i].name && !strcmp("boot", mtd_part[i].name)) {
+		if (mtd_part[i].name &&
+			!strncmp("boot", mtd_part[i].name, 4)) {
 			page_address = mtd_part[i].offset << 6;
 			break;
 		}
