@@ -131,6 +131,7 @@
 #define IPA_IOCTL_DEL_UC_ACT_ENTRY              83
 #define IPA_IOCTL_QUERY_CACHED_DRIVER_MSG       84
 #define IPA_IOCTL_SET_SW_FLT                    85
+#define IPA_IOCTL_SET_GW_IP                     86
 
 /**
  * max size of the header to be inserted
@@ -791,7 +792,13 @@ enum ipa_sw_flt_event {
 #define IPA_SW_FLT_EVENT_MAX IPA_SW_FLT_EVENT_MAX
 };
 
-#define IPA_EVENT_MAX_NUM (IPA_SW_FLT_EVENT_MAX)
+enum ipa_set_gw_ip_addr {
+	IPA_SET_GW_IP_ADDR_EVENT = IPA_SW_FLT_EVENT_MAX,
+	IPA_SET_GW_IP_ADDR_EVENT_MAX,
+	#define IPA_SET_GW_IP_ADDR_EVENT_MAX IPA_SET_GW_IP_ADDR_EVENT_MAX
+};
+
+#define IPA_EVENT_MAX_NUM (IPA_SET_GW_IP_ADDR_EVENT_MAX)
 #define IPA_EVENT_MAX ((int)IPA_EVENT_MAX_NUM)
 
 /**
@@ -3001,6 +3008,22 @@ struct ipa_ioc_sw_flt_list_type {
 };
 
 /**
+ * struct ipa_ioc_set_gw_ip - get gateway IP address
+ * @dev_name: interface name
+ * @ip_type: ip family of the gateway
+ * @gw_ipv4: IPv4 GW ip address
+ * @gw_ipv6: IPv6 GW ip address
+ * @is_default_backhaul_gw: bool to check Gw addr or not
+*/
+struct ipa_ioc_set_gw_ip {
+	char dev_name[IPA_RESOURCE_NAME_MAX];
+	enum ipa_ip_type ip;
+	uint32_t gw_ipv4;
+	uint32_t gw_ipv6[4];
+	uint8_t is_default_backhaul_gw;
+};
+
+/**
  *   actual IOCTLs supported by IPA driver
  */
 #define IPA_IOC_ADD_HDR _IOWR(IPA_IOC_MAGIC, \
@@ -3282,6 +3305,11 @@ struct ipa_ioc_sw_flt_list_type {
 #define IPA_IOC_SET_SW_FLT _IOWR(IPA_IOC_MAGIC, \
 				IPA_IOCTL_SET_SW_FLT, \
 				struct ipa_ioc_sw_flt_list_type)
+
+#define IPA_IOC_SET_GW_IP _IOWR(IPA_IOC_MAGIC,\
+				IPA_IOCTL_SET_GW_IP, \
+				struct ipa_ioc_set_gw_ip)
+
 /*
  * unique magic number of the Tethering bridge ioctls
  */

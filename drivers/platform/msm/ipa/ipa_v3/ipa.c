@@ -738,6 +738,24 @@ static void ipa3_gsb_msg_free_cb(void *buff, u32 len, u32 type)
 	kfree(buff);
 }
 
+static void ipa3_gw_addr_msg_free_cb(void *buff, u32 len, u32 type)
+{
+	if (!buff) {
+		IPAERR("Null buffer\n");
+		return;
+	}
+
+	switch (type) {
+	case IPA_SET_GW_IP_ADDR_EVENT:
+		break;
+	default:
+		IPAERR("Wrong type given. buff %pK type %d\n", buff, type);
+		return;
+	}
+
+	kfree(buff);
+}
+
 static void ipa3_get_usb_ep_info(
 		struct ipa_ioc_get_ep_info *ep_info,
 		struct ipa_ep_pair_info *pair_info
@@ -1135,6 +1153,45 @@ static int ipa3_send_sw_flt_list(unsigned long usr_param)
 		kfree(buff);
 		return retval;
 	}
+	return 0;
+}
+
+static int ipa3_send_gw_addr_set_msg(unsigned long usr_param)
+{
+	int retval;
+	struct ipa_ioc_set_gw_ip *gw_info;
+	struct ipa_msg_meta msg_meta;
+	void *buff;
+
+	memset(&msg_meta, 0, sizeof(msg_meta));
+	msg_meta.msg_type = IPA_SET_GW_IP_ADDR_EVENT;
+
+	gw_info = kzalloc(sizeof(struct ipa_ioc_set_gw_ip),
+			GFP_KERNEL);
+	if (!gw_info) {
+		IPAERR("no memory\n");
+		return -ENOMEM;
+	}
+
+	if (copy_from_user((u8 *)gw_info, (void __user *)usr_param,
+		sizeof(struct ipa_ioc_set_gw_ip))) {
+		kfree(gw_info);
+		return -EFAULT;
+	}
+
+	msg_meta.msg_len = sizeof(struct ipa_ioc_set_gw_ip);
+	buff = gw_info;
+
+	retval = ipa3_send_msg(&msg_meta, buff,
+			ipa3_gw_addr_msg_free_cb);
+	if (retval) {
+		IPAERR("ipa3_send_msg failed: %d\n",
+			retval);
+		kfree(buff);
+		return retval;
+	}
+	IPADBG("exit\n");
+
 	return 0;
 }
 
@@ -3261,6 +3318,14 @@ static long ipa3_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 	case IPA_IOC_DEL_UC_ACT_ENTRY:
 		if (ipa3_del_uc_act_entry((uint16_t)arg)) {
+			retval = -EFAULT;
+			break;
+		}
+		break;
+
+	case IPA_IOC_SET_GW_IP:
+		IPADBG("Got IPA_IOC_SET_GW_IP\n");
+		if (ipa3_send_gw_addr_set_msg(arg)) {
 			retval = -EFAULT;
 			break;
 		}
