@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -19,10 +18,6 @@
 #include <linux/mmc/mmc.h>
 #include <linux/pm_qos.h>
 #include "sdhci-pltfm.h"
-
-#define SDHCI_CTRLLR_MAJOR_VER_MASK 0XF0000000
-#define SDHCI_CTRLLR_MAJOR_VER_SHIFT 28
-#define SDHCI_CTRLLR_VERSION_5 5
 
 /* This structure keeps information per regulator */
 struct sdhci_msm_reg_data {
@@ -284,6 +279,5 @@ void sdhci_msm_pm_qos_cpu_vote(struct sdhci_host *host,
 		struct sdhci_msm_pm_qos_latency *latency, int cpu);
 bool sdhci_msm_pm_qos_cpu_unvote(struct sdhci_host *host, int cpu, bool async);
 
-u32 sdhci_msm_major_version(struct cmdq_host *host);
 
 #endif /* __SDHCI_MSM_H__ */

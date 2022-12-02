@@ -1,5 +1,4 @@
 /* Copyright (c) 2015-2017, 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -383,7 +382,6 @@ static int cmdq_enable(struct mmc_host *mmc)
 	u32 cqcfg;
 	bool dcmd_enable;
 	struct cmdq_host *cq_host = mmc_cmdq_private(mmc);
-	u32 sdhci_ctrl_ver = 0;
 
 	if (!cq_host || !mmc->card || !mmc_card_cmdq(mmc->card)) {
 		err = -EINVAL;
@@ -417,9 +415,7 @@ static int cmdq_enable(struct mmc_host *mmc)
 		 * in CQ register space, due to which few CQ registers are
 		 * shifted. Set offset_changed boolean to use updated address.
 		 */
-		sdhci_ctrl_ver = sdhci_msm_major_version(cq_host);
-		if (sdhci_ctrl_ver >= SDHCI_CTRLLR_VERSION_5)
-			cq_host->offset_changed = true;
+		cq_host->offset_changed = true;
 	}
 
 	cmdq_writel(cq_host, cqcfg, CQCFG);

@@ -1,5 +1,4 @@
 /* Copyright (c) 2020,2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -16,6 +15,7 @@
 
 #include "cmdq_hci-crypto.h"
 
+#if IS_ENABLED(CONFIG_MMC_QTI_NONCMDQ_ICE)
 #define CRYPTO_CDU_SIZE 0xFF
 #define CRYPTO_ICE_INDEX 3
 #define LEGACY_ICE_CAP_VAL 0x50001F06
@@ -52,6 +52,7 @@ int sdhci_crypto_cfg(struct sdhci_host *host, struct mmc_request *mrq,
 void sdhci_msm_ice_update_cfg(struct sdhci_host *host, u64 lba,
 			      u32 slot, unsigned int bypass,
 			      short key_index, u32 cdu_sz);
+#endif
 
 void cmdq_crypto_qti_enable(struct cmdq_host *host);
 
