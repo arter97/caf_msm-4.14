@@ -21,6 +21,7 @@
 #include <linux/regmap.h>
 #include <linux/soc/qcom/smem.h>
 #include <linux/soc/qcom/smem_state.h>
+#include <linux/ipc_logging.h>
 
 /*
  * This driver implements the Qualcomm Shared Memory State Machine, a mechanism
@@ -62,6 +63,16 @@
  */
 #define SMSM_DEFAULT_NUM_ENTRIES	8
 #define SMSM_DEFAULT_NUM_HOSTS		3
+
+static void *ilc;
+
+#define SMSM_LOG_PAGE_CNT  4
+#define SMSM_INFO(fmt, ...) \
+do { \
+	if (ilc) { \
+		ipc_log_string(ilc, "[%s]: " fmt, __func__, ##__VA_ARGS__); \
+	} \
+} while (0)
 
 struct smsm_entry;
 struct smsm_host;
@@ -164,6 +175,7 @@ static int smsm_update_bits(void *data, u32 mask, u32 value)
 
 	/* Don't signal if we didn't change the value */
 	changes = val ^ orig;
+	SMSM_INFO("val: 0x%x, orig: 0x%x", val, orig);
 	if (!changes) {
 		spin_unlock_irqrestore(&smsm->lock, flags);
 		goto done;
@@ -183,8 +195,8 @@ static int smsm_update_bits(void *data, u32 mask, u32 value)
 		val = readl(smsm->subscription + host);
 		if (val & changes && hostp->ipc_regmap) {
 			regmap_write(hostp->ipc_regmap,
-				     hostp->ipc_offset,
-				     BIT(hostp->ipc_bit));
+				hostp->ipc_offset,
+				BIT(hostp->ipc_bit));
 		}
 	}
 
@@ -215,6 +227,7 @@ static irqreturn_t smsm_intr(int irq, void *data)
 	val = readl(entry->remote_state);
 	changed = val ^ entry->last_value;
 	entry->last_value = val;
+	SMSM_INFO("Received bit change: 0x%x\n", changed);
 
 	for_each_set_bit(i, entry->irq_enabled, 32) {
 		if (!(changed & BIT(i)))
@@ -585,6 +598,9 @@ static int qcom_smsm_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, smsm);
+	ilc = ipc_log_context_create(SMSM_LOG_PAGE_CNT, "SMSM", 0);
+	if (!ilc)
+		pr_err("%s : unable to create IPC Logging Context", __func__);
 
 	return 0;
 
