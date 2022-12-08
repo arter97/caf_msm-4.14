@@ -27,6 +27,12 @@
 			qcom,ion-heap-type = "DMA";
 		};
 
+		qcom,ion-heap@26 { /* USER CONTIG HEAP */
+			reg = <26>;
+			memory-region = <&user_contig_mem>;
+			qcom,ion-heap-type = "DMA";
+		};
+
 		qcom,ion-heap@19 { /* QSEECOM TA HEAP */
 			reg = <19>;
 			memory-region = <&qseecom_ta_mem>;
