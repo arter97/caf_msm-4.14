@@ -696,7 +696,7 @@ loop:
 			file = NULL;
 		else if (!get_file_rcu(file))
 			goto loop;
-		else if (files_lookup_fd_raw(files, fd) != file) {
+		else if (__fcheck_files(files, fd) != file) {
 			fput_many(file, refs);
 			goto loop;
 		}
