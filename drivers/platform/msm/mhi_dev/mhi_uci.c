@@ -1137,16 +1137,17 @@ static int mhi_uci_client_open(struct inode *mhi_inode,
 		return -EINVAL;
 	}
 
+	if (!uci_handle) {
+		uci_log(UCI_DBG_ERROR, MHI_UCI_DEFAULT_LOG_MSK,
+				"No memory, returning failure\n");
+		return -ENOMEM;
+	}
+
 	mutex_lock(&uci_handle->client_lock);
 	uci_log(UCI_DBG_DBG, uci_handle->client_index,
 		"Client opened struct device node 0x%x, ref count 0x%x\n",
 		iminor(mhi_inode), atomic_read(&uci_handle->ref_count));
 	if (atomic_add_return(1, &uci_handle->ref_count) == 1) {
-		if (!uci_handle) {
-			atomic_dec(&uci_handle->ref_count);
-			mutex_unlock(&uci_handle->client_lock);
-			return -ENOMEM;
-		}
 		uci_handle->uci_ctxt = &uci_ctxt;
 		uci_handle->f_flags = file_handle->f_flags;
 		if (!atomic_read(&uci_handle->mhi_chans_open)) {
@@ -1795,8 +1796,13 @@ static int mhi_uci_ctrl_set_tiocm(struct uci_client *client,
 
 	reinit_completion(ctrl_client->write_done);
 	ret_val = mhi_uci_send_packet(ctrl_client, ctrl_msg, sizeof(*ctrl_msg));
-	if (ret_val != sizeof(*ctrl_msg))
+	if (ret_val != sizeof(*ctrl_msg)) {
+		uci_log(UCI_DBG_ERROR, ctrl_client->client_index,
+				"Failed to send ctrl msg\n");
+		kfree(ctrl_msg);
+		ctrl_msg = NULL;
 		goto tiocm_error;
+	}
 	compl_ret = wait_for_completion_interruptible_timeout(
 			ctrl_client->write_done,
 			MHI_UCI_ASYNC_WRITE_TIMEOUT);
@@ -1817,7 +1823,6 @@ static int mhi_uci_ctrl_set_tiocm(struct uci_client *client,
 	return 0;
 
 tiocm_error:
-	kfree(ctrl_msg);
 	return ret_val;
 }
 
