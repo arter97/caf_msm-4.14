@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020, Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -227,8 +228,7 @@ enum blk_crypto_mode_num cmdq_blk_crypto_qti_mode_num_for_alg_dusize(
 	return BLK_ENCRYPTION_MODE_INVALID;
 }
 
-#if IS_ENABLED(CONFIG_MMC_QTI_NONCMDQ_ICE)
-int cmdq_host_init_crypto_qti_spec(struct cmdq_host *host,
+int cmdq_host_init_crypto_qti_spec_legacy(struct cmdq_host *host,
 				    const struct keyslot_mgmt_ll_ops *ksm_ops)
 {
 	int err = 0;
@@ -286,7 +286,7 @@ out:
 	host->crypto_capabilities.reg_val = 0;
 	return err;
 }
-#else
+
 int cmdq_host_init_crypto_qti_spec(struct cmdq_host *host,
 				    const struct keyslot_mgmt_ll_ops *ksm_ops)
 {
@@ -294,9 +294,18 @@ int cmdq_host_init_crypto_qti_spec(struct cmdq_host *host,
 	int err = 0;
 	unsigned int crypto_modes_supported[BLK_ENCRYPTION_MODE_MAX];
 	enum blk_crypto_mode_num blk_mode_num;
+	u32 sdhci_ctrl_ver = 0;
 
 	/* Default to disabling crypto */
 	host->caps &= ~CMDQ_CAP_CRYPTO_SUPPORT;
+
+	sdhci_ctrl_ver = sdhci_msm_major_version(host);
+
+	if (sdhci_ctrl_ver == 0xffffffff)
+		return -EINVAL;
+
+	if (sdhci_ctrl_ver < SDHCI_CTRLLR_VERSION_5)
+		return cmdq_host_init_crypto_qti_spec_legacy(host, ksm_ops);
 
 	if (!(cmdq_readl(host, CQCAP) & CQ_CAP_CS)) {
 		pr_debug("%s no crypto capability\n", __func__);
@@ -369,7 +378,6 @@ out:
 	host->crypto_capabilities.reg_val = 0;
 	return err;
 }
-#endif
 
 int cmdq_crypto_qti_init_crypto(struct cmdq_host *host,
 				const struct keyslot_mgmt_ll_ops *ksm_ops)
@@ -379,6 +387,8 @@ int cmdq_crypto_qti_init_crypto(struct cmdq_host *host,
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(sdhci);
 	struct sdhci_msm_host *msm_host = pltfm_host->priv;
 	struct resource *cmdq_ice_memres = NULL;
+	struct crypto_vops_qti_entry *ice_entry = NULL;
+	u32 sdhci_ctrl_ver = 0;
 
 	cmdq_ice_memres = platform_get_resource_byname(msm_host->pdev,
 							IORESOURCE_MEM,
@@ -410,7 +420,24 @@ int cmdq_crypto_qti_init_crypto(struct cmdq_host *host,
 	if (err) {
 		pr_err("%s: Error initiating crypto, err %d\n",
 					__func__, err);
+		return err;
 	}
+
+	ice_entry = (struct crypto_vops_qti_entry *) host->crypto_vops->priv;
+	if (!ice_entry) {
+		err - -EINVAL;
+		pr_err("%s: Error initiating crypto, err %d\n",
+					__func__, err);
+		return err;
+	}
+
+	sdhci_ctrl_ver = sdhci_msm_major_version(host);
+	if (sdhci_ctrl_ver < SDHCI_CTRLLR_VERSION_5 &&
+		(host->mmc->caps2 & MMC_CAP2_CMD_QUEUE))
+		ice_entry->reset_needed = false;
+	else
+		ice_entry->reset_needed = true;
+
 	return err;
 }
 

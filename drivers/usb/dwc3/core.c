@@ -1228,6 +1228,8 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 	device_property_read_u8(dev, "snps,hird-threshold",
 				&hird_threshold);
 
+	dwc->usb2_gadget_lpm_disable = device_property_read_bool(dev,
+				"snps,usb2-gadget-lpm-disable");
 	device_property_read_u32(dev, "snps,xhci-imod-value",
 			&dwc->xhci_imod_value);
 
