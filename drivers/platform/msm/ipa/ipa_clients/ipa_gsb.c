@@ -1,4 +1,5 @@
 /* Copyright (c) 2018 - 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -29,6 +30,7 @@
 #include "../ipa_common_i.h"
 #ifdef CONFIG_IPA3
 #include "../ipa_v3/ipa_pm.h"
+#include "../ipa_v3/ipa_i.h"
 #endif
 
 #define IPA_GSB_DRV_NAME "ipa_gsb"
@@ -759,8 +761,6 @@ static void ipa_gsb_tx_dp_notify(void *priv, enum ipa_dp_evt_type evt,
 
 	/* fetch iface handle from header */
 	mux_hdr = (struct ipa_gsb_mux_hdr *)skb->data;
-	/* change to host order */
-	*(u32 *)mux_hdr = ntohl(*(u32 *)mux_hdr);
 	hdl = mux_hdr->iface_hdl;
 	if ((hdl < 0) || (hdl >= MAX_SUPPORTED_IFACE) ||
 		!ipa_gsb_ctx->iface[hdl]) {
@@ -1217,9 +1217,10 @@ int ipa_bridge_tx_dp(u32 hdl, struct sk_buff *skb,
 	/* add 4 byte header for mux */
 	mux_hdr = (struct ipa_gsb_mux_hdr *)skb_push(skb,
 		sizeof(struct ipa_gsb_mux_hdr));
+	memset(mux_hdr, 0, sizeof(struct ipa_gsb_mux_hdr));
 	mux_hdr->iface_hdl = (u8)hdl;
-	/* change to network order */
-	*(u32 *)mux_hdr = htonl(*(u32 *)mux_hdr);
+	mux_hdr->qmap_id =
+		(u8)ipa3_ctx->ep[ipa_gsb_ctx->prod_hdl].cfg.meta.qmap_id;
 
 	ret = ipa_tx_dp(IPA_CLIENT_ODU_PROD, skb, metadata);
 	if (ret) {
