@@ -3234,7 +3234,15 @@ void ipa3_lan_rx_cb(void *priv, enum ipa_dp_evt_type evt, unsigned long data)
 	 *  ------------------------------------------
 	 */
 	*(u16 *)rx_skb->cb = ((metadata >> 16) & 0xFFFF);
-	*(u8 *)(rx_skb->cb + 4) = ucp;
+	/* For IPA HW ver < 4.5, if ucp bit set means h/w has not
+	 * retained MAC hdr, so for those pkt sent to EMAC driver
+	 * with uCP bit set, EMAC driver will send to N/W stack as
+	 * IP packet. Starting from IPA HW ver >= 4.5, IPA h/w doesn't
+	 * have limitation and send pkt with retined MAC hdr.*/
+	if(ipa3_ctx->ipa_hw_type < IPA_HW_v4_5)
+		*(u8 *)(rx_skb->cb + 4) = ucp;
+	else
+		*(u8 *)(rx_skb->cb + 4) = 0;
 	IPADBG_LOW("meta_data: 0x%x cb: 0x%x\n",
 			metadata, *(u32 *)rx_skb->cb);
 	IPADBG_LOW("ucp: %d\n", *(u8 *)(rx_skb->cb + 4));
