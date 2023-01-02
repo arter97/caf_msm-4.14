@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -45,6 +46,8 @@
  * IPA_CPU_2_HW_CMD_RESET_PIPE : Command to reset a pipe - SW WA for a HW bug.
  * IPA_CPU_2_HW_CMD_GSI_CH_EMPTY : Command to check for GSI channel emptiness.
  * IPA_CPU_2_HW_CMD_REMOTE_IPA_INFO: Command to store remote IPA Info
+ * IPA_CPU_2_HW_CMD_TTL_DECR_CACHE_VLAN_IDS: Command to send the TTL decrement specific
+ *                                           Vlan Id's to uC
  */
 enum ipa3_cpu_2_hw_commands {
 	IPA_CPU_2_HW_CMD_NO_OP                     =
@@ -71,6 +74,8 @@ enum ipa3_cpu_2_hw_commands {
 		FEATURE_ENUM_VAL(IPA_HW_FEATURE_COMMON, 10),
 	IPA_CPU_2_HW_CMD_REMOTE_IPA_INFO           =
 		FEATURE_ENUM_VAL(IPA_HW_FEATURE_COMMON, 11),
+	IPA_CPU_2_HW_CMD_TTL_DECR_CACHE_VLAN_IDS   =
+		FEATURE_ENUM_VAL(IPA_HW_FEATURE_COMMON, 21),
 };
 
 /**
@@ -1161,4 +1166,60 @@ cleanup:
 	IPA_ACTIVE_CLIENTS_DEC_SIMPLE();
 	IPADBG("exit\n");
 	return result;
+}
+
+int ipa3_add_ttl_vlan_map(
+	struct ipa_ttl_vlan_ids *map )
+{
+	struct ipa_mem_buffer  mem;
+	struct ipa_ttl_vlan_ids *cmd;
+	int res;
+
+	if (!map) {
+		IPAERR("null argument (ie. map) passed\n");
+		return -EINVAL;
+	}
+	IPADBG("map add attempt. num_vlan: %u\n", map->num_vlanids);
+
+	for(int i=0; i < IPA_TTL_MAX_VLAN; i++)
+	{
+		IPADBG("Vlan id's %d\n", map->vlans[i]);
+	}
+
+	mem.size = sizeof(struct ipa_ttl_vlan_ids);
+
+	mem.base = dma_alloc_coherent(
+		ipa3_ctx->uc_pdev, mem.size,
+		&mem.phys_base, GFP_KERNEL);
+
+	if (!mem.base) {
+		IPAERR("Fail to alloc DMA buff of size %d\n", mem.size);
+		return -ENOMEM;
+	}
+
+	cmd = (struct ipa_ttl_vlan_ids *) mem.base;
+
+	memcpy(cmd, map, sizeof(struct ipa_ttl_vlan_ids));
+
+	IPA_ACTIVE_CLIENTS_INC_SIMPLE();
+
+	res = ipa3_uc_send_cmd(
+		(u32) mem.phys_base,
+		IPA_CPU_2_HW_CMD_TTL_DECR_CACHE_VLAN_IDS,
+		0, true, 10 * HZ);
+
+	if (res) {
+		IPAERR("ipa3_uc_send_cmd failed %d\n", res);
+		goto free_coherent;
+	}
+
+	IPADBG("map add success\n");
+
+	res = 0;
+
+free_coherent:
+	dma_free_coherent(ipa3_ctx->uc_pdev, mem.size, mem.base, mem.phys_base);
+
+	IPA_ACTIVE_CLIENTS_DEC_SIMPLE();
+	return res;
 }
