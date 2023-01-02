@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -2762,26 +2763,26 @@ static const struct ipa_ep_configuration ipa3_ep_mapping
 	[IPA_4_5_AUTO][IPA_CLIENT_WLAN3_PROD]		= {
 			true, IPA_v4_5_GROUP_UL_DL,
 			true,
-			IPA_DPS_HPS_SEQ_TYPE_2ND_PKT_PROCESS_PASS_NO_DEC_UCP,
+			IPA_DPS_HPS_SEQ_TYPE_3RD_PKT_PROCESS_PASS_DEC_2ND_UCP,
 			QMB_MASTER_SELECT_DDR,
 			{0, 2, 8, 16, IPA_EE_UC, GSI_SMART_PRE_FETCH, 3} },
 	[IPA_4_5_AUTO][IPA_CLIENT_WLAN2_PROD]          = {
 			true, IPA_v4_5_GROUP_UL_DL,
 			true,
-			IPA_DPS_HPS_SEQ_TYPE_2ND_PKT_PROCESS_PASS_NO_DEC_UCP,
+			IPA_DPS_HPS_SEQ_TYPE_3RD_PKT_PROCESS_PASS_DEC_2ND_UCP,
 			QMB_MASTER_SELECT_DDR,
 			{ 9, 12, 8, 16, IPA_EE_AP, GSI_FREE_PRE_FETCH, 2 } },
 	/* config wlan1_prod same as wlan2_prod */
 	[IPA_4_5_AUTO][IPA_CLIENT_WLAN1_PROD]          = {
 			true, IPA_v4_5_GROUP_UL_DL,
 			true,
-			IPA_DPS_HPS_SEQ_TYPE_2ND_PKT_PROCESS_PASS_NO_DEC_UCP,
+			IPA_DPS_HPS_SEQ_TYPE_3RD_PKT_PROCESS_PASS_DEC_2ND_UCP,
 			QMB_MASTER_SELECT_DDR,
 			{ 9, 12, 8, 16, IPA_EE_AP, GSI_FREE_PRE_FETCH, 2 } },
 	[IPA_4_5_AUTO][IPA_CLIENT_USB_PROD]            = {
 			true, IPA_v4_5_GROUP_UL_DL,
 			true,
-			IPA_DPS_HPS_SEQ_TYPE_2ND_PKT_PROCESS_PASS_NO_DEC_UCP,
+			IPA_DPS_HPS_SEQ_TYPE_3RD_PKT_PROCESS_PASS_DEC_2ND_UCP,
 			QMB_MASTER_SELECT_DDR,
 			{ 1, 0, 8, 16, IPA_EE_AP, GSI_ESCAPE_BUF_ONLY, 0 } },
 	[IPA_4_5_AUTO][IPA_CLIENT_APPS_LAN_PROD]	  = {
@@ -2811,7 +2812,7 @@ static const struct ipa_ep_configuration ipa3_ep_mapping
 	[IPA_4_5_AUTO][IPA_CLIENT_ETHERNET_PROD]	  = {
 			true, IPA_v4_5_GROUP_UL_DL,
 			true,
-			IPA_DPS_HPS_SEQ_TYPE_2ND_PKT_PROCESS_PASS_NO_DEC_UCP,
+			IPA_DPS_HPS_SEQ_TYPE_3RD_PKT_PROCESS_PASS_DEC_2ND_UCP,
 			QMB_MASTER_SELECT_DDR,
 			{ 12, 0, 8, 16, IPA_EE_UC, GSI_SMART_PRE_FETCH, 3 } },
 	[IPA_4_5_AUTO][IPA_CLIENT_ETHERNET2_PROD]	  = {

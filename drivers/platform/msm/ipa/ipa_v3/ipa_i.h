@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -3342,4 +3343,6 @@ bool ipa3_is_odl_connected(void);
 bool ipa3_is_modem_up(void);
 /* set modem is up */
 void ipa3_set_modem_up(bool is_up);
+int ipa3_add_ttl_vlan_map(
+	struct ipa_ttl_vlan_ids *map );
 #endif /* _IPA3_I_H_ */

@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -473,6 +474,8 @@ static int ipa3_attrib_dump(struct ipa_rule_attrib *attrib,
 		pr_cont("tos_value:%d ", attrib->tos_value);
 		pr_cont("tos_mask:%d ", attrib->tos_mask);
 	}
+	if (attrib->ext_attrib_mask & IPA_FLT_EXT_TTL_FIELD)
+		pr_cont("ttl:%d ", attrib->ttl_value);
 
 	if (attrib->attrib_mask & IPA_FLT_PROTOCOL)
 		pr_err("protocol:%d ", attrib->u.v4.protocol);
