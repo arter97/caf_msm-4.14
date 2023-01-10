@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020,2021 Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -176,7 +176,7 @@ static int ice_enable_reset(struct crypto_vops_qti_entry *ice_entry)
 	/*
 	 * Starting ICE v3 enabling is done at storage controller (UFS/SDCC)
 	 */
-	if (major >= 3 || !ice_entry->reset_needed)
+	if (major >= 3)
 		return 0;
 
 	/*

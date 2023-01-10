@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020, Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -387,8 +387,6 @@ int cmdq_crypto_qti_init_crypto(struct cmdq_host *host,
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(sdhci);
 	struct sdhci_msm_host *msm_host = pltfm_host->priv;
 	struct resource *cmdq_ice_memres = NULL;
-	struct crypto_vops_qti_entry *ice_entry = NULL;
-	u32 sdhci_ctrl_ver = 0;
 
 	cmdq_ice_memres = platform_get_resource_byname(msm_host->pdev,
 							IORESOURCE_MEM,
@@ -421,21 +419,6 @@ int cmdq_crypto_qti_init_crypto(struct cmdq_host *host,
 					__func__, err);
 		return err;
 	}
-
-	ice_entry = (struct crypto_vops_qti_entry *) host->crypto_vops->priv;
-	if (!ice_entry) {
-		err - -EINVAL;
-		pr_err("%s: Error initiating crypto, err %d\n",
-					__func__, err);
-		return err;
-	}
-
-	sdhci_ctrl_ver = sdhci_msm_major_version(host);
-	if (sdhci_ctrl_ver < SDHCI_CTRLLR_VERSION_5 &&
-		(host->mmc->caps2 & MMC_CAP2_CMD_QUEUE))
-		ice_entry->reset_needed = false;
-	else
-		ice_entry->reset_needed = true;
 
 	return err;
 }
@@ -534,6 +517,7 @@ void crypto_qti_enable_noncmdq(struct sdhci_host *host)
 	if (host->cq_host && cmdq_host_is_crypto_supported(host->cq_host))
 		cmdq_crypto_qti_enable(host->cq_host);
 }
+#endif
 
 void sdhci_msm_ice_update_cfg(struct sdhci_host *host, u64 lba, u32 slot,
 			      unsigned int bypass, short key_index, u32 cdu_sz)
@@ -613,4 +597,3 @@ int sdhci_crypto_cfg(struct sdhci_host *host, struct mmc_request *mrq,
 
 	return 0;
 }
-#endif
