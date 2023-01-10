@@ -1,5 +1,5 @@
 /* Copyright (c) 2020,2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -32,7 +32,6 @@ struct crypto_vops_qti_entry {
 	uint32_t flags;
 	uint32_t major;
 	uint32_t minor;
-	bool reset_needed;
 };
 
 #if IS_ENABLED(CONFIG_QTI_CRYPTO_COMMON)
