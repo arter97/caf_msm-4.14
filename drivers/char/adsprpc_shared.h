@@ -1,5 +1,7 @@
 /*
  * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -300,6 +302,15 @@ struct smq_msg {
 struct smq_invoke_rsp {
 	uint64_t ctx;			/* invoke caller context */
 	int retval;	             /* invoke return value */
+};
+
+enum fastrpc_process_create_state {
+	/* Process is not created */
+	PROCESS_CREATE_DEFAULT			= 0,
+	/* Process creation is in progress */
+	PROCESS_CREATE_IS_INPROGRESS	= 1,
+	/* Process creation is successful */
+	PROCESS_CREATE_SUCCESS			= 2,
 };
 
 static inline struct smq_invoke_buf *smq_invoke_buf_start(remote_arg64_t *pra,
