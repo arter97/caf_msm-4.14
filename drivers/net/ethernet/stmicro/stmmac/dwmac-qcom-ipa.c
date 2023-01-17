@@ -520,6 +520,7 @@ static void ethqos_ipa_tx_desc_init(struct qcom_ethqos *ethqos,
 		 * to zero
 		 */
 		TX_NORMAL_DESC->des3 = 0;
+		TX_NORMAL_DESC->des3 |= (3 << 16);
 	}
 	/* update the total no of Tx descriptors count */
 	DMA_TDRLR_RGWR(QINX, (eth_ipa_ctx.tx_queue->desc_cnt - 1));
