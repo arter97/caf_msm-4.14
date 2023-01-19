@@ -706,9 +706,10 @@
 
 			qcom,modem_qrtr {
 				qcom,glink-channels = "IPCRTR";
-				qcom,intents = <0x800  5
+				qcom,intents = <0x4400 1
+						0x800  5
 						0x2000 3
-						0x4400 2>;
+						0x4400 1>;
 			};
 
 			qcom,apr_tal_rpmsg {
