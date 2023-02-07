@@ -1422,15 +1422,16 @@ int xhci_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 
 			spin_unlock_irqrestore(&xhci->lock, flags);
 			if (link_state == USB_SS_PORT_LS_U0) {
-				int retries = 25;
+				int retries = 48;
 
 				/* wait device to enter U0*/
 				while (retries--) {
-					usleep_range(20000, 25000);
+					usleep_range(40000, 45000);
 					temp = readl(port_array[wIndex]);
 					if ((temp & PORT_PLS_MASK) == XDEV_U0)
 						break;
 				}
+				xhci_info(xhci, "retries = %d\n", retries);
 			}
 			spin_lock_irqsave(&xhci->lock, flags);
 
