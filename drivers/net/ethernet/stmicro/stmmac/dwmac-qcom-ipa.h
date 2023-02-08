@@ -725,6 +725,8 @@ struct ethqos_prv_ipa_data {
 	bool ipa_offload_conn_prev_cv2x;
 	/* State of debugfs creation */
 	bool ipa_debugfs_exists;
+	/* State of sysfs creation */
+	bool ipa_sysfs_exists;
 	/* State of IPA offload suspended by user */
 	bool ipa_offload_susp[IPA_QUEUE_MAX];
 	/* State of IPA offload enablement from PHY link event*/

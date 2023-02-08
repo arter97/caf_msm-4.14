@@ -2361,26 +2361,10 @@ static const struct file_operations fops_ntn_dma_stats = {
 	.llseek = default_llseek,
 };
 
-static DEVICE_ATTR(suspend_ipa_offload, IPA_SYSFS_DEV_ATTR_PERMS,
-		   read_ipa_offload_status,
-		   suspend_resume_ipa_offload);
-
 static int ethqos_ipa_cleanup_debugfs(struct qcom_ethqos *ethqos)
 {
 	struct ethqos_prv_ipa_data *eth_ipa = &eth_ipa_ctx;
 	struct net_device *netdev;
-
-	if (!ethqos) {
-		ETHQOSERR("ethqos is NULL\n");
-		return -EINVAL;
-	}
-
-	netdev = platform_get_drvdata(ethqos->pdev);
-
-	if (!netdev) {
-		ETHQOSERR("netdev is NULL\n");
-		return -EINVAL;
-	}
 
 	if(emac_ipa_dev)
 	{
@@ -2389,9 +2373,6 @@ static int ethqos_ipa_cleanup_debugfs(struct qcom_ethqos *ethqos)
 		cdev_del(emac_ipa_cdev);
 		unregister_chrdev_region(emac_ipa_dev_num, 1);
 	}
-
-	sysfs_remove_file(&netdev->dev.kobj,
-			  &dev_attr_suspend_ipa_offload.attr);
 
 	if (!ethqos || !eth_ipa) {
 		ETHQOSERR("Null Param\n");
@@ -2421,26 +2402,6 @@ static int ethqos_ipa_create_debugfs(struct qcom_ethqos *ethqos)
 {
 	struct ethqos_prv_ipa_data *eth_ipa = &eth_ipa_ctx;
 	int ret;
-	struct net_device *netdev;
-
-	if (!ethqos) {
-		ETHQOSERR("ethqos is NULL\n");
-		return -EINVAL;
-	}
-
-	netdev = platform_get_drvdata(ethqos->pdev);
-
-	if (!netdev) {
-		ETHQOSERR("netdev is NULL\n");
-		return -EINVAL;
-	}
-
-	ret = sysfs_create_file(&netdev->dev.kobj,
-				&dev_attr_suspend_ipa_offload.attr);
-	if (ret) {
-		ETHQOSERR("unable to create suspend_ipa_offload sysfs node\n");
-		goto fail;
-	}
 
 	ret = alloc_chrdev_region(&emac_ipa_dev_num, 0, 1, "emac_ipa");
 	if (ret) {
@@ -2516,6 +2477,73 @@ fail_alloc_emac_ipa_cdev:
 	unregister_chrdev_region(emac_ipa_dev_num, 1);
 alloc_emac_ipa_chrdev_region_fail:
 	return ret;
+}
+
+static DEVICE_ATTR(suspend_ipa_offload, IPA_SYSFS_DEV_ATTR_PERMS,
+		   read_ipa_offload_status,
+		   suspend_resume_ipa_offload);
+
+static int ethqos_ipa_cleanup_sysfs(struct qcom_ethqos *ethqos)
+{
+	struct ethqos_prv_ipa_data *eth_ipa = &eth_ipa_ctx;
+	struct net_device *netdev;
+
+	if (!ethqos) {
+		ETHQOSERR("ethqos is NULL\n");
+		return -EINVAL;
+	}
+
+	netdev = platform_get_drvdata(ethqos->pdev);
+
+	if (!netdev) {
+		ETHQOSERR("netdev is NULL\n");
+		return -EINVAL;
+	}
+
+	sysfs_remove_file(&netdev->dev.kobj,
+			  &dev_attr_suspend_ipa_offload.attr);
+
+	if (!ethqos || !eth_ipa) {
+		ETHQOSERR("Null Param\n");
+		return -ENOMEM;
+	}
+
+	eth_ipa->ipa_sysfs_exists = false;
+	ETHQOSERR("IPA sysfs Deleted Successfully\n");
+	return 0;
+}
+
+/**
+ * DWC_ETH_QOS_ipa_create_sysfs() - Called to create sysfs node
+ * for creating suspend_ipa_offload entry.
+ */
+static int ethqos_ipa_create_sysfs(struct qcom_ethqos *ethqos)
+{
+	struct ethqos_prv_ipa_data *eth_ipa = &eth_ipa_ctx;
+	int ret;
+	struct net_device *netdev;
+
+	if (!ethqos) {
+		ETHQOSERR("ethqos is NULL\n");
+		return -EINVAL;
+	}
+
+	netdev = platform_get_drvdata(ethqos->pdev);
+
+	if (!netdev) {
+		ETHQOSERR("netdev is NULL\n");
+		return -EINVAL;
+	}
+
+	ret = sysfs_create_file(&netdev->dev.kobj,
+				&dev_attr_suspend_ipa_offload.attr);
+	if (ret) {
+		ETHQOSERR("unable to create suspend_ipa_offload sysfs node\n");
+		return -ENOMEM;
+	}
+
+	eth_ipa_ctx.ipa_sysfs_exists = true;
+	return 0;
 }
 
 static int ethqos_ipa_offload_connect(
@@ -3167,6 +3195,12 @@ static int ethqos_disable_ipa_offload(struct qcom_ethqos *ethqos)
 			eth_ipa_ctx.ipa_debugfs_exists = false;
 	}
 
+	if (eth_ipa_ctx.ipa_sysfs_exists) {
+		if (ethqos_ipa_cleanup_sysfs(ethqos))
+			ETHQOSERR("Unable to delete IPA sysfs\n");
+		else
+			eth_ipa_ctx.ipa_sysfs_exists = false;
+}
 	ETHQOSDBG("Exit\n");
 
 	return ret;
@@ -3235,6 +3269,15 @@ static int ethqos_enable_ipa_offload(struct qcom_ethqos *ethqos)
 			eth_ipa_ctx.ipa_debugfs_exists = true;
 		} else {
 			ETHQOSERR("eMAC Debugfs failed\n");
+		}
+	}
+
+	if (!eth_ipa_ctx.ipa_sysfs_exists) {
+		if (!ethqos_ipa_create_sysfs(ethqos)) {
+			ETHQOSERR("eMAC Sysfs created\n");
+			eth_ipa_ctx.ipa_sysfs_exists = true;
+		} else {
+			ETHQOSERR("eMAC Sysfs failed\n");
 		}
 	}
 
@@ -3484,8 +3527,8 @@ void ethqos_ipa_offload_event_handler(void *data,
 		    qcom_ethqos_is_phy_link_up(eth_ipa_ctx.ethqos))
 			ethqos_enable_ipa_offload(eth_ipa_ctx.ethqos);
 
-		if (!eth_ipa_ctx.ipa_debugfs_exists &&
-		    eth_ipa_ctx.emac_dev_reset) {
+		if (eth_ipa_ctx.emac_dev_reset) {
+			if(!eth_ipa_ctx.ipa_debugfs_exists){
 			if (!ethqos_ipa_create_debugfs(eth_ipa_ctx.ethqos)) {
 				ETHQOSERR("eMAC Debugfs created\n");
 				eth_ipa_ctx.ipa_debugfs_exists = true;
@@ -3493,6 +3536,16 @@ void ethqos_ipa_offload_event_handler(void *data,
 				ETHQOSERR("eMAC Debugfs failed\n");
 			}
 		}
+			if(!eth_ipa_ctx.ipa_sysfs_exists){
+				if (!ethqos_ipa_create_sysfs(eth_ipa_ctx.ethqos)) {
+					ETHQOSERR("eMAC Sysfs created\n");
+					eth_ipa_ctx.ipa_sysfs_exists = true;
+				} else {
+					ETHQOSERR("eMAC Sysfs failed\n");
+				}
+			}
+		}
+
 		eth_ipa_ctx.emac_dev_reset = false;
 
 		break;
