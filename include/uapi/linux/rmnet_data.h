@@ -230,4 +230,11 @@ enum rmnet_config_return_codes_e {
 	RMNET_CONFIG_TC_HANDLE_FULL
 };
 
+enum rmnet_ip_route_call_type {
+       RMNET_IP_ROUTE_CALL_TYPE_NONE,
+       RMNET_IP_ROUTE_CALL_TYPE_IP,
+       RMNET_IP_ROUTE_CALL_TYPE_NONIP,
+       RMNET_IP_ROUTE_CALL_TYPE_MAX
+};
+
 #endif /* _RMNET_DATA_H_ */
