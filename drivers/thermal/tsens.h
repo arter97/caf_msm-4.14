@@ -1,4 +1,5 @@
 /* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -169,6 +170,7 @@ struct tsens_ops {
 	int (*dbg)(struct tsens_device *, u32, u32, int *);
 	int (*sensor_en)(struct tsens_device *, u32);
 	int (*calibrate)(struct tsens_device *);
+	int (*resume)(struct tsens_device *);
 };
 
 struct tsens_irqs {
@@ -232,6 +234,7 @@ struct tsens_device {
 	struct work_struct		therm_fwk_notify;
 	bool				tsens_reinit_wa;
 	int				tsens_reinit_cnt;
+	int				zeroc_sensor_id;
 	struct tsens_sensor		sensor[0];
 };
 
