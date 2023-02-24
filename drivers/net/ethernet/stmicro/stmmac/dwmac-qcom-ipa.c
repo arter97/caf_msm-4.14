@@ -1905,7 +1905,13 @@ static ssize_t suspend_resume_ipa_offload(struct device *dev,
 		}
 
 	} else {
-		ETHQOSERR("Operation not permitted, No PHY link");
+		if (option == 0) {
+                        /* Reset flag here to allow connection of pipes on next PHY link up*/
+			eth_ipa_ctx.ipa_offload_susp[IPA_QUEUE_BE] = false;
+			eth_ipa_ctx.ipa_offload_susp[IPA_QUEUE_CV2X] = false;
+			eth_ipa_ctx.ipa_offload_link_down = true;
+		}
+		ETHQOSINFO("No PHY link");
 	}
 
 	return count;
@@ -3634,6 +3640,13 @@ void ethqos_ipa_offload_event_handler(void *data,
 		priv->hw->mac->map_mtl_to_dma(priv->hw, EMAC_QUEUE_0,
 					      EMAC_CHANNEL_1);
 		ETHQOSINFO("Mapped queue 0 to channel 1\n");
+		break;
+	case EV_DMA_RESET:
+		pdev = (eth_ipa_ctx.ethqos)->pdev;
+		dev = platform_get_drvdata(pdev);
+		priv = netdev_priv(dev);
+		if (!eth_ipa_ctx.ipa_offload_conn)
+			priv->hw->mac->map_mtl_to_dma(priv->hw, EMAC_QUEUE_0, EMAC_CHANNEL_1);
 		break;
 	case EV_INVALID:
 	default:
