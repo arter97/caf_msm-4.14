@@ -84,3 +84,10 @@ EXPORT_SYMBOL(__arm_smccc_hvc);
 EXPORT_SYMBOL(__dma_inv_area);
 EXPORT_SYMBOL(__dma_clean_area);
 EXPORT_SYMBOL(__dma_flush_area);
+
+EXPORT_SYMBOL(__start_rodata);
+EXPORT_SYMBOL(__end_rodata);
+EXPORT_SYMBOL(_sdata);
+EXPORT_SYMBOL(_edata);
+EXPORT_SYMBOL(__bss_start);
+EXPORT_SYMBOL(__bss_stop);
