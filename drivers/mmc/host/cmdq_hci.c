@@ -1,5 +1,5 @@
 /* Copyright (c) 2015-2017, 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -34,6 +34,7 @@
 #include "sdhci.h"
 #include "sdhci-msm.h"
 #include "../core/queue.h"
+#include "cmdq_hci-crypto-qti.h"
 
 #define DCMD_SLOT 31
 #define NUM_SLOTS 32
@@ -789,6 +790,9 @@ static int cmdq_request(struct mmc_host *mmc, struct mmc_request *mrq)
 	struct cmdq_host *cq_host = (struct cmdq_host *)mmc_cmdq_private(mmc);
 	struct sdhci_host *host = mmc_priv(mmc);
 	u64 ice_ctx = 0;
+#if IS_ENABLED(CONFIG_MMC_CQ_HCI_CRYPTO_QTI)
+	u32 sdhci_ctrl_ver = 0;
+#endif
 
 	if (!cq_host->enabled) {
 		pr_err("%s: CMDQ host not enabled yet !!!\n",
@@ -806,7 +810,18 @@ static int cmdq_request(struct mmc_host *mmc, struct mmc_request *mrq)
 		tag = DCMD_SLOT;
 		goto ring_doorbell;
 	}
+#if IS_ENABLED(CONFIG_MMC_CQ_HCI_CRYPTO_QTI)
+	sdhci_ctrl_ver = sdhci_msm_major_version(cq_host);
 
+	if (sdhci_ctrl_ver == SDHCI_CTRLLR_VERSION_4) {
+		err = sdhci_crypto_cfg(host, mrq, tag);
+		if (err) {
+			pr_err("%s: failed to set crypto ctx for tag %d\n",
+				mmc_hostname(mmc), tag);
+			goto ice_err;
+		}
+	}
+#endif
 	err = cmdq_crypto_get_ctx(cq_host, mrq, &ice_ctx);
 	if (err) {
 		mmc->err_stats[MMC_ERR_ICE_CFG]++;
