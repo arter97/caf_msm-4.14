@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -69,6 +70,12 @@
 #define TSENS_TM_TRDY_FIRST_ROUND_COMPLETE_SHIFT	3
 #define TSENS_INIT_ID	0x5
 #define TSENS_RECOVERY_LOOP_COUNT 5
+#define TSENS_TM_0C_THR_MASK			0xfff
+#define TSENS_TM_0C_THR_OFFSET			12
+#define TSENS_TM_0C_INT_STATUS(n)		((n) + 0xe0)
+#define TSENS_TM_0C_THRESHOLDS(n)		((n) + 0x1c)
+#define TSENS_TM_0C_CTRL(n)			((n) + 0x18)
+#define TSENS_TM_0C_THRESHOLD_DELTA_MILLIDEG	100
 
 static void msm_tsens_convert_temp(int last_temp, int *temp)
 {
@@ -783,6 +790,50 @@ static int tsens2xxx_register_interrupts(struct tsens_device *tmdev)
 	return 0;
 }
 
+static void dump_tsens_status(struct tsens_device *tm, char *cntxt)
+{
+	pr_debug("%s: %s: MASK:0x%x 0c_thresh:0x%x 0c_CTRL:0x%x ZEROC:0x%x\n",
+		cntxt, __func__,
+		readl_relaxed(
+		TSENS_TM_UPPER_LOWER_INT_MASK(tm->tsens_tm_addr)),
+		readl_relaxed(TSENS_TM_0C_THRESHOLDS(
+			TSENS_CTRL_ADDR(tm->tsens_srot_addr))),
+		readl_relaxed(TSENS_TM_0C_CTRL(
+			TSENS_CTRL_ADDR(tm->tsens_srot_addr))),
+		readl_relaxed(TSENS_TM_0C_INT_STATUS(tm->tsens_tm_addr)));
+	pr_debug("%s: %s: thresh[%d]:0x%x S%d_STATUS:0x%x\n",
+		cntxt, __func__, tm->zeroc_sensor_id,
+		readl_relaxed(
+			(TSENS_TM_SN_UPPER_LOWER_THRESHOLD(tm->tsens_tm_addr)) +
+			tm->zeroc_sensor_id * TSENS_TM_SN_ADDR_OFFSET),
+		tm->zeroc_sensor_id,
+		readl_relaxed(TSENS_TM_SN_STATUS(tm->tsens_tm_addr) +
+			(tm->zeroc_sensor_id << TSENS_STATUS_ADDR_OFFSET)));
+}
+
+static int tsens2xxx_tsens_resume(struct tsens_device *tm)
+{
+	int status = 0, thrs, set_thr;
+	void __iomem *srot_addr;
+
+	if (tm->zeroc_sensor_id < 0)
+		return 0;
+
+	dump_tsens_status(tm, "Resume_Begin");
+	status = readl_relaxed(TSENS_TM_0C_INT_STATUS(tm->tsens_tm_addr));
+	if (status) {
+		srot_addr = TSENS_CTRL_ADDR(tm->tsens_srot_addr);
+		thrs = readl_relaxed(TSENS_TM_0C_THRESHOLDS(srot_addr));
+		msm_tsens_convert_temp(((thrs >> TSENS_TM_0C_THR_OFFSET) &
+				TSENS_TM_0C_THR_MASK), &set_thr);
+		of_thermal_handle_trip_temp(tm->sensor[tm->zeroc_sensor_id].tzd,
+			set_thr - TSENS_TM_0C_THRESHOLD_DELTA_MILLIDEG);
+		dump_tsens_status(tm, "Resume_end_with_0c");
+	}
+
+	return 0;
+}
+
 static const struct tsens_ops ops_tsens2xxx = {
 	.hw_init	= tsens2xxx_hw_init,
 	.get_temp	= tsens2xxx_get_temp,
@@ -790,6 +841,7 @@ static const struct tsens_ops ops_tsens2xxx = {
 	.interrupts_reg	= tsens2xxx_register_interrupts,
 	.dbg		= tsens2xxx_dbg,
 	.sensor_en	= tsens2xxx_hw_sensor_en,
+	.resume		= tsens2xxx_tsens_resume,
 };
 
 const struct tsens_data data_tsens2xxx = {
