@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1366,7 +1367,19 @@ static int ipa_fltrt_generate_hw_rule_bdy_ip4(u16 *en_rule,
 		IPAHAL_ERR("could not find equation for tos\n");
 		goto err;
 	}
-
+	if (attrib->ext_attrib_mask & IPA_FLT_EXT_TTL_FIELD) {
+		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ofst_meq32, ofst_meq32)) {
+			IPAHAL_ERR("ran out of meq32 eq\n");
+			goto err;
+		}
+		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
+			ipa3_0_ofst_meq32[ofst_meq32]);
+		/* offset of ttl ip in v4 header */
+		extra = ipa_write_8(8, extra);
+		rest = ipa_write_32(0xFF << 24, rest);
+		rest = ipa_write_32(attrib->ttl_value  << 24, rest);
+		ofst_meq32++;
+	}
 	goto done;
 
 err:
@@ -1916,6 +1929,20 @@ static int ipa_fltrt_generate_hw_rule_bdy_ip6(u16 *en_rule,
 
 	if (attrib->attrib_mask & IPA_FLT_FRAGMENT)
 		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(IPA_IS_FRAG);
+
+	if (attrib->ext_attrib_mask & IPA_FLT_EXT_TTL_FIELD) {
+		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ofst_meq32, ofst_meq32)) {
+			IPAHAL_ERR("ran out of meq32 eq\n");
+			goto err;
+		}
+		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
+			ipa3_0_ofst_meq32[ofst_meq32]);
+		/* offset of hop limit in v6 header */
+		extra = ipa_write_8(7, extra);
+		rest = ipa_write_32(0xFF << 24, rest);
+		rest = ipa_write_32(attrib->ttl_value << 24, rest);
+		ofst_meq32++;
+	}
 
 	goto done;
 

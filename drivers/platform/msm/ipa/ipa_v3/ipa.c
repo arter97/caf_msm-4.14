@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1165,6 +1166,7 @@ static long ipa3_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct ipa_ioc_wigig_fst_switch fst_switch;
 	struct ipa_nat_in_sram_info nat_in_sram_info;
 	union ipa_ioc_uc_activation_entry uc_act;
+	struct ipa_ttl_vlan_ids ttl_vlan_ids;
 	size_t sz;
 	int pre_entry;
 	int hdl;
@@ -2336,7 +2338,25 @@ static long ipa3_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			break;
 		}
 		break;
-
+	case IPA_IOC_TTL_VLAN_MAPPING:
+		IPADBG("Got IPA_IOC_TTL_VLAN_MAPPING\n");
+		if (copy_from_user(
+				&ttl_vlan_ids,
+				(const void __user *) arg,
+				sizeof(struct ipa_ttl_vlan_ids))) {
+			IPAERR_RL("copy_from_user fails\n");
+			retval = -EFAULT;
+			break;
+		}
+		if(ttl_vlan_ids.num_vlanids != 0)
+		{
+			retval = ipa3_add_ttl_vlan_map(&ttl_vlan_ids);
+		}
+		else {
+			IPAERR_RL("Vlan id's size is empty\n");
+			retval = -EFAULT;
+		}
+		break;
 	case IPA_IOC_CLEANUP:
 		/*Route and filter rules will also be clean*/
 		IPADBG("Got IPA_IOC_CLEANUP\n");
