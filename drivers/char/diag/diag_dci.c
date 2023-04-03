@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -3208,23 +3209,25 @@ int diag_dci_deinit_client(struct diag_dci_client_tbl *entry)
 	 * Clear the client's log and event masks, update the cumulative
 	 * masks and send the masks to peripherals
 	 */
-	vfree(entry->dci_log_mask);
-	entry->dci_log_mask = NULL;
+	create_dci_log_mask_tbl(entry->dci_log_mask, DCI_LOG_MASK_CLEAN);
 	diag_dci_invalidate_cumulative_log_mask(token);
 	if (token == DCI_LOCAL_PROC)
 		diag_update_userspace_clients(DCI_LOG_MASKS_TYPE);
 	ret = dci_ops_tbl[token].send_log_mask(token);
 	if (ret != DIAG_DCI_NO_ERROR)
 		return ret;
-	vfree(entry->dci_event_mask);
-	entry->dci_event_mask = NULL;
+	vfree(entry->dci_log_mask);
+	entry->dci_log_mask = NULL;
+
+	create_dci_event_mask_tbl(entry->dci_event_mask);
 	diag_dci_invalidate_cumulative_event_mask(token);
 	if (token == DCI_LOCAL_PROC)
 		diag_update_userspace_clients(DCI_EVENT_MASKS_TYPE);
 	ret = dci_ops_tbl[token].send_event_mask(token);
 	if (ret != DIAG_DCI_NO_ERROR)
 		return ret;
-
+	vfree(entry->dci_event_mask);
+	entry->dci_event_mask = NULL;
 	list_for_each_safe(start, req_temp, &driver->dci_req_list) {
 		req_entry = list_entry(start, struct dci_pkt_req_entry_t,
 				       track);
