@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2007 Google, Inc.
  * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1856,6 +1857,8 @@ static int msm_nand_is_erased_page_ps(struct mtd_info *mtd, loff_t from,
 	memcpy(&raw_ops, ops, sizeof(struct mtd_oob_ops));
 	raw_ops.mode = MTD_OPS_RAW;
 	ecc = kzalloc(total_ecc_byte_cnt, GFP_KERNEL);
+	if (!ecc)
+		return -ENOMEM;
 
 	wait_event(chip->dma_wait_queue, (dma_buffer = msm_nand_get_dma_buffer(
 					chip, sizeof(*dma_buffer))));
@@ -2552,6 +2555,8 @@ static int msm_nand_is_erased_page(struct mtd_info *mtd, loff_t from,
 	memcpy(&raw_ops, ops, sizeof(struct mtd_oob_ops));
 	raw_ops.mode = MTD_OPS_RAW;
 	ecc = kzalloc(total_ecc_byte_cnt, GFP_KERNEL);
+	if (!ecc)
+		return -ENOMEM;
 
 	wait_event(chip->dma_wait_queue, (dma_buffer = msm_nand_get_dma_buffer(
 					chip, sizeof(*dma_buffer))));
