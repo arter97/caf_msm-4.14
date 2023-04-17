@@ -1,4 +1,5 @@
 /* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -117,6 +118,9 @@ static int get_device_tree_data(struct platform_device *pdev,
 	const struct tsens_data *data;
 	int rc = 0;
 	struct resource *res_tsens_mem;
+	u32 ltvr_id;
+	int ltvr_trip_temp;
+	int ltvr_clear_temp;
 
 	if (!of_match_node(tsens_table, of_node)) {
 		pr_err("Need to read SoC specific fuse map\n");
@@ -190,6 +194,40 @@ static int get_device_tree_data(struct platform_device *pdev,
 			}
 		}
 	}
+
+	tmdev->ltvr_resume_trigger =
+		of_property_read_bool(of_node, "ltvr-resume-trigger");
+
+	tmdev->ltvr_sensor_id = INT_MIN;
+	tmdev->ltvr_trip_temp_delta = INT_MIN;
+	tmdev->ltvr_clear_temp_delta = INT_MIN;
+
+	if (tmdev->ltvr_resume_trigger) {
+		if (!of_property_read_u32(of_node, "ltvr-sensor-id", &ltvr_id))
+			if (ltvr_id < TSENS_MAX_SENSORS)
+				tmdev->ltvr_sensor_id = (int)ltvr_id;
+
+		tmdev->ltvr_status_support =
+			of_property_read_bool(of_node, "ltvr-status-support");
+
+		if (!tmdev->ltvr_status_support) {
+			if (!of_property_read_u32(of_node,
+				"ltvr-trip-temp-delta", &ltvr_trip_temp))
+				tmdev->ltvr_trip_temp_delta =
+					(int)ltvr_trip_temp;
+			if (!of_property_read_u32(of_node,
+				"ltvr-clear-temp-delta", &ltvr_clear_temp))
+				tmdev->ltvr_clear_temp_delta =
+					(int)ltvr_clear_temp;
+		}
+
+		if (tmdev->ltvr_sensor_id < 0 || (!tmdev->ltvr_status_support &&
+			(tmdev->ltvr_trip_temp_delta < 0 ||
+				tmdev->ltvr_clear_temp_delta < 0)))
+			tmdev->ltvr_resume_trigger = false;
+	}
+
+
 	tmdev->tsens_reinit_wa =
 			of_property_read_bool(of_node, "tsens-reinit-wa");
 
@@ -343,11 +381,29 @@ int tsens_tm_probe(struct platform_device *pdev)
 	return rc;
 }
 
+static int tsens_suspend(struct device *dev)
+{
+	return 0;
+}
+
+static int tsens_resume(struct device *dev)
+{
+	struct tsens_device *tmdev = dev_get_drvdata(dev);
+
+	return tmdev->ops->resume(tmdev);
+}
+
+static const struct dev_pm_ops tsens_pm_ops = {
+	.suspend = tsens_suspend,
+	.resume = tsens_resume,
+};
+
 static struct platform_driver tsens_tm_driver = {
 	.probe = tsens_tm_probe,
 	.remove = tsens_tm_remove,
 	.driver = {
 		.name = "msm-tsens",
+		.pm = &tsens_pm_ops,
 		.owner = THIS_MODULE,
 		.of_match_table = tsens_table,
 	},
