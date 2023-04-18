@@ -154,6 +154,26 @@
 	compatible = "qcom,gcc-sdxprairie-v2", "syscon";
 };
 
+&clock_cpu {
+
+	qcom,speed0-bin-v0 =
+		<          0 RPMH_REGULATOR_LEVEL_OFF>,
+		<  345600000 RPMH_REGULATOR_LEVEL_LOW_SVS>,
+		<  576000000 RPMH_REGULATOR_LEVEL_SVS>,
+		< 1094400000 RPMH_REGULATOR_LEVEL_NOM>,
+		< 1497600000 RPMH_REGULATOR_LEVEL_TURBO>;
+};
+
+&msm_cpufreq {
+	qcom,cpufreq-table-0 =
+		<  153600 >,
+		<  300000 >,
+		<  345600 >,
+		<  576000 >,
+		< 1094400 >,
+		< 1497600 >;
+};
+
 &pcie_ep {
 	qcom,pcie-phy-ver = <2102>;
 	qcom,phy-init = <0x1240 0x001 0x0 0x1
