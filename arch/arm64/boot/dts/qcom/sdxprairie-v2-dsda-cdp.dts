@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,6 +15,7 @@
 
 #include "sdxprairie-v2.dtsi"
 #include "sdxprairie-cdp.dtsi"
+#include "sa515m.dtsi"
 
 / {
 	model = "Qualcomm Technologies, Inc. SDXPRAIRIE v2 CDP TEL AU DSDA";
@@ -170,10 +172,6 @@
 &vreg_rgmii_io_pads {
 	regulator-min-microvolt = <1800000>;
 	regulator-max-microvolt = <1800000>;
-};
-
-&mpss_adsp_mem {
-	reg = <0x90800000 0xf800000>;
 };
 
 &ipa_hw {
