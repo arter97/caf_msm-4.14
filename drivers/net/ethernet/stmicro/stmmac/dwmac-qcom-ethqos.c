@@ -3702,6 +3702,8 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 				 */
 				i = ethqos->cv2x_vlan.rx_queue;
 				plat_dat->rx_queues_cfg[i].use_rtc = true;
+				i = ethqos->qoe_vlan.rx_queue;
+				plat_dat->rx_queues_cfg[i].use_rtc = true;
 			}
 		}
 	}
@@ -3939,6 +3941,16 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 				if (plat_dat->jumbo_mtu)
 					priv->rx_queue[i].jumbo_en = true;
 				priv->rx_queue[i].dma_rx_desc_sz =
+					DMA_RX_SIZE_CV2X;
+			}
+		}
+		if (ethqos->qoe_mode) {
+			priv->rx_queue[i].en_fep = true;
+			if (i == ethqos->qoe_vlan.rx_queue) {
+				priv->rx_queue[i].dis_mod = true;
+				if (plat_dat->jumbo_mtu)
+					priv->rx_queue[i].jumbo_en = true;
+		        	priv->rx_queue[i].dma_rx_desc_sz =
 					DMA_RX_SIZE_CV2X;
 			}
 		}
