@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -263,7 +264,7 @@ static int ipc_write(struct platform_device *pdev, char *buf,
 	spin_unlock_irqrestore(&ipc_dev->lock, flags);
 
 retry_write:
-	if (ipc_dev->current_state == IPC_DISCONNECTED) {
+	if ((ipc_dev->current_state == IPC_DISCONNECTED) || !ipc_dev->online) {
 		pr_err("%s: Interface disconnected, cannot queue req\n",
 		       __func__);
 		ipc_dev->pending_writes--;
@@ -355,7 +356,7 @@ static int ipc_read(struct platform_device *pdev, char *buf, unsigned int count)
 	spin_unlock_irqrestore(&ipc_dev->lock, flags);
 
 retry_read:
-	if (ipc_dev->current_state == IPC_DISCONNECTED) {
+	if ((ipc_dev->current_state == IPC_DISCONNECTED) || !ipc_dev->online) {
 		pr_err("%s: Interface disconnected, cannot queue req\n",
 		       __func__);
 		ipc_dev->pending_reads--;

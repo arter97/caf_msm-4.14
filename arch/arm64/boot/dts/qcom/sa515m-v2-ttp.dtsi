@@ -19,6 +19,14 @@
 };
 
 &soc {
+	tsens@c222000 {
+		reg = <0xc222000 0x20>,
+			<0xc263000 0x1ff>;
+		ltvr-resume-trigger;
+		ltvr-sensor-id = <0>;
+		ltvr-status-support;
+	};
+
 	qmi-tmd-devices {
 		modem {
 			modem_v2x: modem_v2x {
@@ -45,6 +53,13 @@
 
 /* delete pm8150b nodes */
 &thermal_zones {
+	/delete-node/ aoss0-usr;
+	/delete-node/ mdm-q6-lowf;
+	/delete-node/ ipa-lowf;
+	/delete-node/ cpu0-0-lowf;
+	/delete-node/ mdm-core-2-lowf;
+	/delete-node/ mdm-core-1-lowf;
+	/delete-node/ mdm-core-0-lowf;
 	/delete-node/ pm8150b-wp-therm;
 	/delete-node/ pm8150b_tz;
 	/delete-node/ pm8150b-ibat-lvl0;
