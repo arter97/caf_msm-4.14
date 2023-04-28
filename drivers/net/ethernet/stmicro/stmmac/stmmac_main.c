@@ -5184,6 +5184,88 @@ static void stmmac_reset_queues_param(struct stmmac_priv *priv)
 	}
 }
 
+
+static void stmmac_reinit_rx_buffers(struct stmmac_priv *priv)
+{
+	u32 rx_cnt = priv->plat->rx_queues_to_use;
+	int ret;
+	int queue;
+	int i;
+
+	for (queue = 0; queue < rx_cnt; queue++) {
+		struct stmmac_rx_queue *rx_q = &priv->rx_queue[queue];
+
+		for (i = 0; i < DMA_RX_SIZE; i++) {
+			if (rx_q->rx_skbuff[i]) {
+				dma_unmap_single(GET_MEM_PDEV_DEV, rx_q->rx_skbuff_dma[i],
+					priv->dma_buf_sz, DMA_FROM_DEVICE);
+				dev_kfree_skb_any(rx_q->rx_skbuff[i]);
+			}
+			rx_q->rx_skbuff[i] = NULL;
+		}
+	}
+
+	for (queue = 0; queue < rx_cnt; queue++) {
+		struct stmmac_rx_queue *rx_q = &priv->rx_queue[queue];
+
+		for (i = 0; i < DMA_RX_SIZE; i++) {
+			struct dma_desc *p;
+
+			if (priv->extend_desc)
+				p = (struct dma_desc *)(rx_q->dma_erx + i);
+			else
+				p = rx_q->dma_rx + i;
+
+			if (likely(!rx_q->rx_skbuff[i])) {
+				struct sk_buff *skb;
+
+				skb = netdev_alloc_skb_ip_align(priv->dev, priv->dma_buf_sz);
+				if (unlikely(!skb)) {
+					if (unlikely(net_ratelimit()))
+						dev_err(priv->device,
+							"fail to alloc skb entry %d\n",
+							i);
+					goto err_reinit_rx_buffers;
+				}
+
+				rx_q->rx_skbuff[i] = skb;
+				rx_q->rx_skbuff_dma[i] =
+				dma_map_single(GET_MEM_PDEV_DEV, skb->data, priv->dma_buf_sz,
+					       DMA_FROM_DEVICE);
+				if (dma_mapping_error(GET_MEM_PDEV_DEV,
+						      rx_q->rx_skbuff_dma[i])) {
+					netdev_err(priv->dev, "Rx DMA map failed\n");
+					dev_kfree_skb(skb);
+					goto err_reinit_rx_buffers;
+				}
+			}
+
+			if (unlikely(priv->synopsys_id >= DWMAC_CORE_4_00)) {
+				p->des0 = cpu_to_le32(rx_q->rx_skbuff_dma[i]);
+				p->des1 = 0;
+			} else {
+				p->des2 = cpu_to_le32(rx_q->rx_skbuff_dma[i]);
+			}
+			if ((priv->hw->mode->init_desc3) &&
+			    (priv->dma_buf_sz == BUF_SIZE_16KiB))
+				priv->hw->mode->init_desc3(p);
+		}
+
+	}
+
+	return;
+	err_reinit_rx_buffers:
+	do {
+		while (--i >= 0)
+			stmmac_free_rx_buffer(priv, queue, i);
+
+		if (queue == 0)
+			break;
+
+		i = DMA_RX_SIZE;
+	} while (queue-- > 0);
+}
+
 /**
  * stmmac_resume - resume callback
  * @dev: device pointer
@@ -5231,6 +5313,8 @@ int stmmac_resume(struct device *dev)
 	 * next tso xmit (only used for gmac4).
 	 */
 	priv->mss = 0;
+
+	stmmac_reinit_rx_buffers(priv);
 
 	stmmac_clear_descriptors(priv);
 
