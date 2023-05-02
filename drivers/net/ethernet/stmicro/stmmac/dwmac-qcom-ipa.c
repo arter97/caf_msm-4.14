@@ -3132,6 +3132,15 @@ static int ethqos_ipa_offload_resume(struct qcom_ethqos *ethqos,
 		break;
 	}
 
+	if (!eth_ipa_ctx.ipa_debugfs_exists) {
+		if (!ethqos_ipa_create_debugfs(ethqos)) {
+			ETHQOSERR("eMAC Debugfs created\n");
+			eth_ipa_ctx.ipa_debugfs_exists = true;
+		} else {
+			ETHQOSERR("eMAC Debugfs failed\n");
+		}
+	}
+
 	return ret;
 }
 
@@ -3437,8 +3446,10 @@ void ethqos_ipa_offload_event_handler(void *data,
 		    eth_ipa_ctx.ipa_offload_link_down ||
 		    (eth_ipa_ctx.ipa_offload_susp[IPA_QUEUE_BE] &&
 		    eth_ipa_ctx.ipa_offload_susp[IPA_QUEUE_CV2X]) ||
-		    !eth_ipa_ctx.ipa_offload_conn)
+		    !eth_ipa_ctx.ipa_offload_conn) {
+			eth_ipa_ctx.ipa_offload_link_down = true;
 			break;
+		}
 
 		for (type = 0; type < IPA_QUEUE_MAX; type++)
 			ethqos_ipa_offload_suspend(eth_ipa_ctx.ethqos,
@@ -3449,9 +3460,10 @@ void ethqos_ipa_offload_event_handler(void *data,
 		if (!eth_ipa_ctx.emac_dev_ready ||
 		    !eth_ipa_ctx.ipa_uc_ready ||
 		    (eth_ipa_ctx.ipa_offload_susp[IPA_QUEUE_BE] &&
-		    eth_ipa_ctx.ipa_offload_susp[IPA_QUEUE_CV2X]))
+		    eth_ipa_ctx.ipa_offload_susp[IPA_QUEUE_CV2X])) {
+			eth_ipa_ctx.ipa_offload_link_down = false;
 			break;
-
+		}
 		/* Link up event is expected only after link down */
 		if (eth_ipa_ctx.ipa_offload_link_down) {
 			for (type = 0; type < IPA_QUEUE_MAX; type++)
