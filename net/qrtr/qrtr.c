@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2015, Sony Mobile Communications Inc.
  * Copyright (c) 2013, 2018-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,7 +22,7 @@
 #include <linux/ipc_logging.h>
 #include <linux/uidgid.h>
 #include <linux/pm_wakeup.h>
-
+#include <linux/spinlock.h>
 #include <net/sock.h>
 #include <uapi/linux/sched/types.h>
 
@@ -133,7 +134,7 @@ static DECLARE_RWSEM(qrtr_node_lock);
 
 /* local port allocation management */
 static DEFINE_IDR(qrtr_ports);
-static DEFINE_MUTEX(qrtr_port_lock);
+static DEFINE_SPINLOCK(qrtr_port_lock);
 
 /* backup buffers */
 #define QRTR_BACKUP_HI_NUM	5
@@ -213,6 +214,8 @@ static int qrtr_bcast_enqueue(struct qrtr_node *node, struct sk_buff *skb,
 static void qrtr_handle_del_proc(struct qrtr_node *node, struct sk_buff *skb);
 static void qrtr_cleanup_flow_control(struct qrtr_node *node,
 				      struct sk_buff *skb);
+static struct qrtr_sock *qrtr_port_lookup(int port);
+static void qrtr_port_put(struct qrtr_sock *ipc);
 
 static void qrtr_log_tx_msg(struct qrtr_node *node, struct qrtr_hdr_v1 *hdr,
 			    struct sk_buff *skb)
@@ -841,6 +844,7 @@ int qrtr_endpoint_post(struct qrtr_endpoint *ep, const void *data, size_t len)
 	const struct qrtr_hdr_v2 *v2;
 	struct sk_buff *skb;
 	struct qrtr_cb *cb;
+	struct qrtr_sock *ipc;
 	unsigned int size;
 	int errcode;
 	unsigned int ver;
@@ -918,8 +922,19 @@ int qrtr_endpoint_post(struct qrtr_endpoint *ep, const void *data, size_t len)
 	skb_store_bits(skb, 0, data + hdrlen, size);
 	qrtr_log_rx_msg(node, skb);
 
-	skb_queue_tail(&node->rx_queue, skb);
-	kthread_queue_work(&node->kworker, &node->read_data);
+	if (cb->type != QRTR_TYPE_DATA || cb->dst_node != qrtr_local_nid) {
+		skb_queue_tail(&node->rx_queue, skb);
+		kthread_queue_work(&node->kworker, &node->read_data);
+	} else {
+		ipc = qrtr_port_lookup(cb->dst_port);
+		if (!ipc) {
+			kfree_skb(skb);
+			return -ENODEV;
+		}
+		if (sock_queue_rcv_skb(&ipc->sk, skb))
+			goto err;
+		qrtr_port_put(ipc);
+	}
 
 	return 0;
 
@@ -953,9 +968,6 @@ static struct sk_buff *qrtr_alloc_ctrl_packet(struct qrtr_ctrl_pkt **pkt)
 
 	return skb;
 }
-
-static struct qrtr_sock *qrtr_port_lookup(int port);
-static void qrtr_port_put(struct qrtr_sock *ipc);
 
 /* Prepare skb for forwarding by allocating enough linear memory to align and
  * add the header since qrtr transports do not support fragmented skbs
@@ -1421,15 +1433,16 @@ EXPORT_SYMBOL_GPL(qrtr_endpoint_unregister);
 static struct qrtr_sock *qrtr_port_lookup(int port)
 {
 	struct qrtr_sock *ipc;
+	unsigned long flags;
 
 	if (port == QRTR_PORT_CTRL)
 		port = 0;
 
-	mutex_lock(&qrtr_port_lock);
+	spin_lock_irqsave(&qrtr_port_lock, flags);
 	ipc = idr_find(&qrtr_ports, port);
 	if (ipc)
 		sock_hold(&ipc->sk);
-	mutex_unlock(&qrtr_port_lock);
+	spin_unlock_irqrestore(&qrtr_port_lock, flags);
 
 	return ipc;
 }
@@ -1491,6 +1504,7 @@ exit:
 static void qrtr_port_remove(struct qrtr_sock *ipc)
 {
 	int port = ipc->us.sq_port;
+	unsigned long flags;
 
 	qrtr_send_del_client(ipc);
 	if (port == QRTR_PORT_CTRL)
@@ -1498,9 +1512,9 @@ static void qrtr_port_remove(struct qrtr_sock *ipc)
 
 	__sock_put(&ipc->sk);
 
-	mutex_lock(&qrtr_port_lock);
+	spin_lock_irqsave(&qrtr_port_lock, flags);
 	idr_remove(&qrtr_ports, port);
-	mutex_unlock(&qrtr_port_lock);
+	spin_unlock_irqrestore(&qrtr_port_lock, flags);
 }
 
 /* Assign port number to socket.
@@ -1574,6 +1588,7 @@ static int __qrtr_bind(struct socket *sock,
 {
 	struct qrtr_sock *ipc = qrtr_sk(sock->sk);
 	struct sock *sk = sock->sk;
+	unsigned long flags;
 	int port;
 	int rc;
 
@@ -1581,17 +1596,17 @@ static int __qrtr_bind(struct socket *sock,
 	if (!zapped && addr->sq_port == ipc->us.sq_port)
 		return 0;
 
-	mutex_lock(&qrtr_port_lock);
+	spin_lock_irqsave(&qrtr_port_lock, flags);
 	port = addr->sq_port;
 	rc = qrtr_port_assign(ipc, &port);
 	if (rc) {
-		mutex_unlock(&qrtr_port_lock);
+		spin_unlock_irqrestore(&qrtr_port_lock, flags);
 		return rc;
 	}
 	/* Notify all open ports about the new controller */
 	if (port == QRTR_PORT_CTRL)
 		qrtr_reset_ports();
-	mutex_unlock(&qrtr_port_lock);
+	spin_unlock_irqrestore(&qrtr_port_lock, flags);
 
 	if (port == QRTR_PORT_CTRL) {
 		struct qrtr_node *node;
