@@ -492,6 +492,7 @@ static int ipc_bind(struct usb_configuration *c, struct usb_function *f)
 		if (status < 0)
 			return status;
 		ipc_string_defs[0].id = status;
+		intf_desc.iInterface = status;
 	}
 
 	intf_desc.bInterfaceNumber =  usb_interface_id(c, f);
@@ -588,6 +589,8 @@ static void ipc_unbind(struct usb_configuration *c, struct usb_function *f)
 		usb_ep_free_request(ctxt->out, ctxt->out_req);
 	if (ctxt->in_req)
 		usb_ep_free_request(ctxt->in, ctxt->in_req);
+	 /* Reset string id */
+	ipc_string_defs[0].id = 0;
 }
 
 static int ipc_set_alt(struct usb_function *f, unsigned int intf,
