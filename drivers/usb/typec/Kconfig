@@ -19,6 +19,12 @@ config TYPEC_TCPCI
 	help
 	  Type-C Port Controller driver for TCPCI-compliant controller.
 
+if TYPEC_TCPM
+
+source "drivers/usb/typec/fusb302/Kconfig"
+
+endif
+
 config TYPEC_WCOVE
 	tristate "Intel WhiskeyCove PMIC USB Type-C PHY driver"
 	depends on ACPI
