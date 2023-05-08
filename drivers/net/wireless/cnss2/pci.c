@@ -1577,14 +1577,6 @@ static int cnss_qcn9000_ramdump(struct cnss_pci_data *pci_priv)
 		return -ENOMEM;
 	}
 
-	meta_info->magic = CNSS_RAMDUMP_MAGIC;
-	meta_info->version = CNSS_RAMDUMP_VERSION;
-	meta_info->chipset = pci_priv->device_id;
-	meta_info->total_entries = CNSS_FW_DUMP_TYPE_MAX;
-
-	ramdump_segs->v_address = meta_info;
-	ramdump_segs->size = sizeof(*meta_info);
-
 	s = ramdump_segs + CNSS_NUM_META_INFO_SEGMENTS;
 	for (i = 0; i < dump_data->nentries; i++) {
 		if (dump_seg->type >= CNSS_FW_DUMP_TYPE_MAX) {
@@ -1609,11 +1601,11 @@ static int cnss_qcn9000_ramdump(struct cnss_pci_data *pci_priv)
 
 	meta_info->magic = CNSS_RAMDUMP_MAGIC;
 	meta_info->version = CNSS_RAMDUMP_VERSION;
-	meta_info->chipset = plat_priv->device_id;
+	meta_info->chipset = pci_priv->device_id;
 	meta_info->total_entries = CNSS_FW_DUMP_TYPE_MAX;
 
-	ramdump_segs->v_address = &meta_info;
-	ramdump_segs->size = sizeof(meta_info);
+	ramdump_segs->v_address = meta_info;
+	ramdump_segs->size = sizeof(*meta_info);
 
 	ret = do_elf_ramdump(info_v2->ramdump_dev, ramdump_segs,
 			     dump_data->nentries + CNSS_NUM_META_INFO_SEGMENTS);
