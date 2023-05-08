@@ -3162,6 +3162,14 @@ static int ethqos_ipa_offload_resume(struct qcom_ethqos *ethqos,
 		break;
 	}
 
+	if (!eth_ipa_ctx.ipa_debugfs_exists) {
+		if (!ethqos_ipa_create_debugfs(eth_ipa_ctx.ethqos)) {
+			ETHQOSERR("eMAC Debugfs created\n");
+			eth_ipa_ctx.ipa_debugfs_exists = true;
+		} else {
+			ETHQOSERR("eMAC Debugfs failed\n");
+		}
+	}
 	return ret;
 }
 
@@ -3498,8 +3506,7 @@ void ethqos_ipa_offload_event_handler(void *data,
 			break;
 
 		/* Link up event is expected only after link down */
-		if (eth_ipa_ctx.ipa_offload_link_down &&
-				eth_ipa_ctx.ipa_debugfs_exists) {
+		if (eth_ipa_ctx.ipa_offload_link_down) {
 			for (type = 0; type < IPA_QUEUE_MAX; type++)
 				ethqos_ipa_offload_resume(eth_ipa_ctx.ethqos,
 							  type, false);
