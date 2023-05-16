@@ -264,7 +264,7 @@ static int ipc_write(struct platform_device *pdev, char *buf,
 	spin_unlock_irqrestore(&ipc_dev->lock, flags);
 
 retry_write:
-	if (ipc_dev->current_state == IPC_DISCONNECTED) {
+	if (!ipc_dev->connected) {
 		pr_err("%s: Interface disconnected, cannot queue req\n",
 		       __func__);
 		ipc_dev->pending_writes--;
@@ -356,7 +356,7 @@ static int ipc_read(struct platform_device *pdev, char *buf, unsigned int count)
 	spin_unlock_irqrestore(&ipc_dev->lock, flags);
 
 retry_read:
-	if (ipc_dev->current_state == IPC_DISCONNECTED) {
+	if (!ipc_dev->connected) {
 		pr_err("%s: Interface disconnected, cannot queue req\n",
 		       __func__);
 		ipc_dev->pending_reads--;
