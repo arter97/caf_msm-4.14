@@ -617,6 +617,8 @@ struct qcom_ethqos {
 	struct delayed_work tdu_rec;
 	bool tdu_scheduled;
 	int tdu_chan;
+
+	bool skip_ipa_autoresume;
 };
 
 struct pps_cfg {
