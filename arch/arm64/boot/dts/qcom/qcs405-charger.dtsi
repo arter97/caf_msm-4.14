@@ -1,0 +1,29 @@
+/*
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&i2c_3_b {
+	status = "ok";
+	qcom,high-time-clk-div = <26>;
+
+	#include "smb2352.dtsi"
+};
+
+&smb2352_charger {
+	qcom,fv-max-uv = <8800000>;
+	qcom,fcc-max-ua = <3250000>;
+	qcom,trickle-current-ua = <50000>;
+	qcom,precharge-current-ua = <750000>;
+	qcom,termination-current-ua = <(-325000)>;
+	qcom,auto-recharge-soc = <98>;
+	qcom,chg-inhibit-threshold-uv = <200000>;
+};
