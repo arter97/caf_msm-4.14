@@ -513,12 +513,54 @@ static void dump_tsens_status(struct tsens_device *tm, char *cntxt)
 			(tm->ltvr_sensor_id << TSENS_STATUS_ADDR_OFFSET)));
 }
 
+static int tsens1xxx_pm_activate_all_trip_type(struct tsens_device *tm,
+		enum thermal_device_mode mode)
+{
+	struct tsens_sensor *tm_sensor = NULL;
+	int i, rc = 0;
+
+	for (i = 0; i < TSENS_MAX_SENSORS; i++) {
+		if (IS_ERR(tm->sensor[i].tzd) || (i == tm->ltvr_sensor_id))
+			continue;
+
+		tm_sensor = &tm->sensor[i];
+		rc = tsens_tz_activate_trip_type(tm_sensor,
+				THERMAL_TRIP_CONFIGURABLE_HI,
+				mode);
+		if (rc)
+			pr_debug("%s:trip high disable error:%d sensor[%d]\n",
+				__func__, rc, i);
+		rc = tsens_tz_activate_trip_type(tm_sensor,
+				THERMAL_TRIP_CONFIGURABLE_LOW,
+				mode);
+		if (rc)
+			pr_debug("%s:trip low disable error:%d sensor[%d]\n",
+				__func__, rc, i);
+	}
+
+	return rc;
+}
+
 static int tsens1xxx_tsens_resume(struct tsens_device *tm)
 {
 	int ret, i;
 	struct tsens_sensor *zeroc_sensor = NULL;
 	unsigned int temp;
 	unsigned long flags;
+
+	if (tm->tm_disable_on_suspend) {
+		spin_lock_irqsave(&tm->tsens_upp_low_lock, flags);
+		atomic_set(&tm->in_suspend, 0);
+		spin_unlock_irqrestore(&tm->tsens_upp_low_lock, flags);
+
+		for (i = 0; i < TSENS_MAX_SENSORS; i++) {
+			if (IS_ERR_OR_NULL(tm->sensor[i].tzd) ||
+					(i == tm->ltvr_sensor_id))
+				continue;
+			of_thermal_handle_trip(tm->sensor[i].tzd);
+		}
+		dump_tsens_status(tm, "resume_tm_disable_exit");
+	}
 
 	if (!tm->ltvr_resume_trigger)
 		return 0;
@@ -548,6 +590,23 @@ static int tsens1xxx_tsens_resume(struct tsens_device *tm)
 	return 0;
 }
 
+static int tsens1xxx_tsens_suspend(struct tsens_device *tm)
+{
+	unsigned long flags;
+
+	if (!tm->tm_disable_on_suspend)
+		return 0;
+
+	dump_tsens_status(tm, "Suspend_Entry");
+	spin_lock_irqsave(&tm->tsens_upp_low_lock, flags);
+	tsens1xxx_pm_activate_all_trip_type(tm, THERMAL_DEVICE_DISABLED);
+	atomic_set(&tm->in_suspend, 1);
+	spin_unlock_irqrestore(&tm->tsens_upp_low_lock, flags);
+	dump_tsens_status(tm, "Suspend_Exit");
+
+	return 0;
+}
+
 static const struct tsens_ops ops_tsens1xxx = {
 	.hw_init = tsens1xxx_hw_init,
 	.get_temp = tsens1xxx_get_temp,
@@ -556,6 +615,7 @@ static const struct tsens_ops ops_tsens1xxx = {
 	.sensor_en = tsens1xxx_hw_sensor_en,
 	.calibrate = calibrate_8937,
 	.dbg = tsens2xxx_dbg,
+	.suspend = tsens1xxx_tsens_suspend,
 	.resume = tsens1xxx_tsens_resume,
 };
 
@@ -579,6 +639,7 @@ static const struct tsens_ops ops_tsens1xxx_405 = {
 	.sensor_en = tsens1xxx_hw_sensor_en,
 	.calibrate = calibrate_405,
 	.dbg = tsens2xxx_dbg,
+	.suspend = tsens1xxx_tsens_suspend,
 	.resume = tsens1xxx_tsens_resume,
 };
 
@@ -602,6 +663,7 @@ static const struct tsens_ops ops_tsens1xxx_9607 = {
 	.sensor_en = tsens1xxx_hw_sensor_en,
 	.calibrate = calibrate_9607,
 	.dbg = tsens2xxx_dbg,
+	.suspend = tsens1xxx_tsens_suspend,
 	.resume = tsens1xxx_tsens_resume,
 };
 

@@ -170,6 +170,7 @@ struct tsens_ops {
 	int (*dbg)(struct tsens_device *, u32, u32, int *);
 	int (*sensor_en)(struct tsens_device *, u32);
 	int (*calibrate)(struct tsens_device *);
+	int (*suspend)(struct tsens_device *);
 	int (*resume)(struct tsens_device *);
 };
 
@@ -238,6 +239,8 @@ struct tsens_device {
 	bool			ltvr_status_support;
 	int				ltvr_trip_temp_delta;
 	int				ltvr_clear_temp_delta;
+	bool			tm_disable_on_suspend;
+	atomic_t			in_suspend;
 	struct tsens_sensor		sensor[0];
 };
 
