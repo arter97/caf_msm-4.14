@@ -192,9 +192,17 @@
 
 	/delete-node/ qcom,wlan_dsp@7000000;
 	/delete-node/ qcom,icnss@18800000;
+
+	tsens@4a8000 {
+		ltvr-resume-trigger;
+		ltvr-sensor-id = <0>;
+		ltvr-trip-temp-delta = <2000>;
+		ltvr-clear-temp-delta = <1000>;
+	};
 };
 
 &thermal_zones {
+	/delete-node/ aoss0-usr;
 	aoss-lowf {
 		cooling-maps {
 
