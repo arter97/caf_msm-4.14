@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -55,6 +56,8 @@
 #define TSENS_THRESHOLD_MAX_CODE	0x3ff
 #define TSENS_THRESHOLD_MIN_CODE	0x0
 #define TSENS_SCALE_MILLIDEG		1000
+#define TSENS_0c_TRIGGER_THRESHOLD		5000
+#define TSENS_0c_CLEAR_THRESHOLD		10000
 
 static int code_to_degc(u32 adc_code, const struct tsens_sensor *sensor)
 {
@@ -497,6 +500,54 @@ static int tsens1xxx_register_interrupts(struct tsens_device *tmdev)
 	return 0;
 }
 
+static void dump_tsens_status(struct tsens_device *tm, char *cntxt)
+{
+	pr_debug("%s: %s: thresh_mask[%d]:0x%x S%d_STATUS:0x%x\n",
+		cntxt, __func__,
+		readl_relaxed(
+			(TSENS_S0_UPPER_LOWER_STATUS_CTRL_ADDR(tm->tsens_tm_addr)) +
+			tm->ltvr_sensor_id * TSENS_SN_ADDR_OFFSET),
+		tm->ltvr_sensor_id,
+		readl_relaxed(TSENS_SN_STATUS_ADDR(tm->tsens_tm_addr +
+		tm->ctrl_data->tsens_sn_offset) +
+			(tm->ltvr_sensor_id << TSENS_STATUS_ADDR_OFFSET)));
+}
+
+static int tsens1xxx_tsens_resume(struct tsens_device *tm)
+{
+	int ret, i;
+	struct tsens_sensor *zeroc_sensor = NULL;
+	unsigned int temp;
+	unsigned long flags;
+
+	if (!tm->ltvr_resume_trigger)
+		return 0;
+
+	dump_tsens_status(tm,
+		"ltvr_resume_begin_with_no_status_support");
+	zeroc_sensor = &tm->sensor[tm->ltvr_sensor_id];
+	ret = tsens1xxx_get_temp(zeroc_sensor, &temp);
+	if (ret) {
+		pr_err("Error:%d reading temp sensor\n", ret);
+		return 0;
+	}
+
+	if (zeroc_sensor->thr_state.low_th_state &&
+		temp <= (TSENS_0c_TRIGGER_THRESHOLD +
+		tm->ltvr_trip_temp_delta)) {
+		of_thermal_handle_trip_temp(zeroc_sensor->tzd,
+			TSENS_0c_TRIGGER_THRESHOLD);
+		dump_tsens_status(tm, "ltvr_resume_end_with_0c_set");
+	} else if (zeroc_sensor->thr_state.high_th_state &&
+			temp >= TSENS_0c_CLEAR_THRESHOLD -
+			tm->ltvr_clear_temp_delta) {
+		of_thermal_handle_trip_temp(zeroc_sensor->tzd,
+			TSENS_0c_CLEAR_THRESHOLD);
+		dump_tsens_status(tm, "ltvr_resume_end_with_0c_reset");
+	}
+	return 0;
+}
+
 static const struct tsens_ops ops_tsens1xxx = {
 	.hw_init = tsens1xxx_hw_init,
 	.get_temp = tsens1xxx_get_temp,
@@ -505,6 +556,7 @@ static const struct tsens_ops ops_tsens1xxx = {
 	.sensor_en = tsens1xxx_hw_sensor_en,
 	.calibrate = calibrate_8937,
 	.dbg = tsens2xxx_dbg,
+	.resume = tsens1xxx_tsens_resume,
 };
 
 const struct tsens_data data_tsens14xx = {
@@ -527,6 +579,7 @@ static const struct tsens_ops ops_tsens1xxx_405 = {
 	.sensor_en = tsens1xxx_hw_sensor_en,
 	.calibrate = calibrate_405,
 	.dbg = tsens2xxx_dbg,
+	.resume = tsens1xxx_tsens_resume,
 };
 
 const struct tsens_data data_tsens14xx_405 = {
@@ -549,6 +602,7 @@ static const struct tsens_ops ops_tsens1xxx_9607 = {
 	.sensor_en = tsens1xxx_hw_sensor_en,
 	.calibrate = calibrate_9607,
 	.dbg = tsens2xxx_dbg,
+	.resume = tsens1xxx_tsens_resume,
 };
 
 const struct tsens_data data_tsens14xx_9607 = {
