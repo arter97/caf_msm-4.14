@@ -213,6 +213,13 @@
 		pinctrl-0 = <&sdx_ext_ipc_gpio_default>;
 		qcom,default-policy-nop;
 	};
+
+	tsens@4a8000 {
+		ltvr-resume-trigger;
+		ltvr-sensor-id = <0>;
+		ltvr-trip-temp-delta = <2000>;
+		ltvr-clear-temp-delta = <1000>;
+	};
 };
 
 &blsp1_uart1_active {
@@ -274,6 +281,7 @@
 };
 
 &thermal_zones {
+	/delete-node/ aoss0-usr;
 	aoss-lowf {
 		cooling-maps {
 
