@@ -13,7 +13,7 @@
 
 #include <linux/module.h>
 #include <linux/i2c.h>
-#include <linux/extcon.h>
+#include <linux/extcon-provider.h>
 #include <linux/regmap.h>
 #include <linux/of_gpio.h>
 #include <linux/interrupt.h>

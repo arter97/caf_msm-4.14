@@ -15,7 +15,7 @@
 #include <linux/i2c.h>
 #include <linux/debugfs.h>
 #include <linux/errno.h>
-#include <linux/extcon.h>
+#include <linux/extcon-provider.h>
 #include <linux/module.h>
 #include <linux/interrupt.h>
 #include <linux/slab.h>
