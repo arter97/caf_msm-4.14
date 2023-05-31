@@ -198,6 +198,7 @@
 		ltvr-sensor-id = <0>;
 		ltvr-trip-temp-delta = <2000>;
 		ltvr-clear-temp-delta = <1000>;
+		tm-disable-on-suspend;
 	};
 };
 
