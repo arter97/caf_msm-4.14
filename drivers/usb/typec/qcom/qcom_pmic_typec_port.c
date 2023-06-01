@@ -40,7 +40,7 @@ struct pmic_typec_port {
 	bool				debouncing_cc;
 	struct delayed_work		cc_debounce_dwork;
 
-	spinlock_t			lock;	/* Register atomicity */
+	struct mutex			lock;	/* Register atomicity */
 };
 
 static const char * const typec_cc_status_name[] = {
@@ -83,11 +83,10 @@ static void qcom_pmic_typec_port_cc_debounce(struct work_struct *work)
 {
 	struct pmic_typec_port *pmic_typec_port =
 		container_of(work, struct pmic_typec_port, cc_debounce_dwork.work);
-	unsigned long flags;
 
-	spin_lock_irqsave(&pmic_typec_port->lock, flags);
+	mutex_lock(&pmic_typec_port->lock);
 	pmic_typec_port->debouncing_cc = false;
-	spin_unlock_irqrestore(&pmic_typec_port->lock, flags);
+	mutex_unlock(&pmic_typec_port->lock);
 
 	dev_dbg(pmic_typec_port->dev, "Debounce cc complete\n");
 }
@@ -99,10 +98,9 @@ static irqreturn_t pmic_typec_port_isr(int irq, void *dev_id)
 	u32 misc_stat;
 	bool vbus_change = false;
 	bool cc_change = false;
-	unsigned long flags;
 	int ret;
 
-	spin_lock_irqsave(&pmic_typec_port->lock, flags);
+	mutex_lock(&pmic_typec_port->lock);
 
 	ret = regmap_read(pmic_typec_port->regmap,
 			  pmic_typec_port->base + TYPEC_MISC_STATUS_REG,
@@ -122,7 +120,7 @@ static irqreturn_t pmic_typec_port_isr(int irq, void *dev_id)
 	}
 
 done:
-	spin_unlock_irqrestore(&pmic_typec_port->lock, flags);
+	mutex_unlock(&pmic_typec_port->lock);
 
 	if (vbus_change)
 		tcpm_vbus_change(pmic_typec_port->tcpm_port);
@@ -278,10 +276,9 @@ int qcom_pmic_typec_port_set_cc(struct pmic_typec_port *pmic_typec_port,
 	struct device *dev = pmic_typec_port->dev;
 	unsigned int mode, currsrc;
 	unsigned int misc;
-	unsigned long flags;
 	int ret;
 
-	spin_lock_irqsave(&pmic_typec_port->lock, flags);
+	mutex_lock(&pmic_typec_port->lock);
 
 	ret = regmap_read(pmic_typec_port->regmap,
 			  pmic_typec_port->base + TYPEC_MISC_STATUS_REG,
@@ -327,7 +324,7 @@ int qcom_pmic_typec_port_set_cc(struct pmic_typec_port *pmic_typec_port,
 	ret = 0;
 
 done:
-	spin_unlock_irqrestore(&pmic_typec_port->lock, flags);
+	mutex_unlock(&pmic_typec_port->lock);
 
 	dev_dbg(dev, "set_cc: currsrc=%x %s mode %s debounce %d attached %d cc=%s\n",
 		currsrc, rp_sel_to_name(currsrc),
@@ -342,10 +339,9 @@ int qcom_pmic_typec_port_set_vconn(struct pmic_typec_port *pmic_typec_port, bool
 {
 	struct device *dev = pmic_typec_port->dev;
 	unsigned int orientation, misc, mask, value;
-	unsigned long flags;
 	int ret;
 
-	spin_lock_irqsave(&pmic_typec_port->lock, flags);
+	mutex_lock(&pmic_typec_port->lock);
 
 	ret = regmap_read(pmic_typec_port->regmap,
 			  pmic_typec_port->base + TYPEC_MISC_STATUS_REG, &misc);
@@ -366,7 +362,7 @@ int qcom_pmic_typec_port_set_vconn(struct pmic_typec_port *pmic_typec_port, bool
 				 pmic_typec_port->base + TYPEC_VCONN_CONTROL_REG,
 				 mask, value);
 done:
-	spin_unlock_irqrestore(&pmic_typec_port->lock, flags);
+	mutex_unlock(&pmic_typec_port->lock);
 
 	dev_dbg(dev, "set_vconn: orientation %d control 0x%08x state %s cc %s vconn %s\n",
 		orientation, value, on ? "on" : "off", misc_to_vconn(misc), misc_to_cc(misc));
@@ -381,7 +377,6 @@ int qcom_pmic_typec_port_start_toggling(struct pmic_typec_port *pmic_typec_port,
 	struct device *dev = pmic_typec_port->dev;
 	unsigned int misc;
 	u8 mode = 0;
-	unsigned long flags;
 	int ret;
 
 	switch (port_type) {
@@ -396,7 +391,7 @@ int qcom_pmic_typec_port_start_toggling(struct pmic_typec_port *pmic_typec_port,
 		break;
 	}
 
-	spin_lock_irqsave(&pmic_typec_port->lock, flags);
+	mutex_lock(&pmic_typec_port->lock);
 
 	ret = regmap_read(pmic_typec_port->regmap,
 			  pmic_typec_port->base + TYPEC_MISC_STATUS_REG, &misc);
@@ -419,7 +414,7 @@ int qcom_pmic_typec_port_start_toggling(struct pmic_typec_port *pmic_typec_port,
 			   pmic_typec_port->base + TYPEC_MODE_CFG_REG,
 			   mode);
 done:
-	spin_unlock_irqrestore(&pmic_typec_port->lock, flags);
+	mutex_unlock(&pmic_typec_port->lock);
 
 	return ret;
 }
@@ -528,7 +523,7 @@ int qcom_pmic_typec_port_probe(struct platform_device *pdev,
 	pmic_typec_port->regmap = regmap;
 	pmic_typec_port->nr_irqs = res->nr_irqs;
 	pmic_typec_port->irq_data = irq_data;
-	spin_lock_init(&pmic_typec_port->lock);
+	mutex_init(&pmic_typec_port->lock);
 	INIT_DELAYED_WORK(&pmic_typec_port->cc_debounce_dwork,
 			  qcom_pmic_typec_port_cc_debounce);
 
