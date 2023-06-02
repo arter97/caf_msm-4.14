@@ -4225,11 +4225,17 @@ int cnss_pci_probe(struct pci_dev *pci_dev,
 	cnss_pr_dbg("PCI is probing, vendor ID: 0x%x, device ID: 0x%x\n",
 		    id->vendor, pci_dev->device);
 
-	pci_priv = devm_kzalloc(&pci_dev->dev, sizeof(*pci_priv),
-				GFP_KERNEL);
-	if (!pci_priv) {
-		ret = -ENOMEM;
-		goto out;
+	if (!plat_priv->bus_priv) {
+		pci_priv = devm_kzalloc(&pci_dev->dev, sizeof(*pci_priv),
+					GFP_KERNEL);
+		if (!pci_priv) {
+			ret = -ENOMEM;
+			goto out;
+		}
+		plat_priv->bus_priv = pci_priv;
+	} else {
+		pci_priv = plat_priv->bus_priv;
+		memset(pci_priv, 0, sizeof(*pci_priv));
 	}
 
 	pci_priv->pci_link_state = PCI_LINK_UP;
@@ -4240,7 +4246,6 @@ int cnss_pci_probe(struct pci_dev *pci_dev,
 	pci_priv->device_id = pci_dev->device;
 	cnss_set_pci_priv(pci_dev, pci_priv);
 	plat_priv->device_id = pci_dev->device;
-	plat_priv->bus_priv = pci_priv;
 	snprintf(plat_priv->firmware_name, sizeof(plat_priv->firmware_name),
 		 DEFAULT_FW_FILE_NAME);
 	snprintf(plat_priv->fw_fallback_name, sizeof(plat_priv->fw_fallback_name),
@@ -4331,6 +4336,8 @@ unregister_ramdump:
 	cnss_unregister_ramdump(plat_priv);
 unregister_subsys:
 	cnss_unregister_subsys(plat_priv);
+	devm_kfree(&pci_dev->dev, pci_priv);
+	cnss_set_pci_priv(pci_dev, NULL);
 	plat_priv->bus_priv = NULL;
 out:
 	return ret;
@@ -4372,7 +4379,6 @@ void cnss_pci_remove(struct pci_dev *pci_dev)
 		cnss_pci_deinit_smmu(pci_priv);
 #endif
 	cnss_unregister_ramdump(plat_priv);
-	plat_priv->bus_priv = NULL;
 
 	cnss_pr_info("Pci device removed\n");
 }
