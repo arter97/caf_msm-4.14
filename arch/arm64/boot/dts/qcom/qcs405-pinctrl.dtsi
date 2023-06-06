@@ -3408,5 +3408,21 @@
 				};
 			};
 		};
+
+		smb2352_gpio_int {
+			smb2352_gpio_int_active: smb2352_gpio_int_active {
+				mux {
+					pins = "gpio80";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio80";
+					drive-strength = <2>;
+					bias-pull-up;
+					input-enable;
+				};
+			};
+		};
 	};
 };
