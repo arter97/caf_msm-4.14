@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -633,6 +634,48 @@
 
 				config {
 					pins = "gpio19", "gpio20";
+					drive-strength = <2>;
+					bias-disable;
+				};
+			};
+
+			i2c_3_b_sda_active: i2c_3_b_sda_active {
+				/* active state */
+				mux {
+					pins = "gpio41";
+					function = "blsp_i2c_sda_b2";
+				};
+
+				config {
+					pins = "gpio41";
+					drive-strength = <2>;
+					bias-disable;
+				};
+			};
+
+			i2c_3_b_scl_active: i2c_3_b_scl_active {
+				/* active state */
+				mux {
+					pins = "gpio42";
+					function = "blsp_i2c_scl_b2";
+				};
+
+				config {
+					pins = "gpio42";
+					drive-strength = <2>;
+					bias-disable;
+				};
+			};
+
+			i2c_3_b_sleep: i2c_3_b_sleep {
+				/* suspended state */
+				mux {
+					pins = "gpio41", "gpio42";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio41", "gpio42";
 					drive-strength = <2>;
 					bias-disable;
 				};
