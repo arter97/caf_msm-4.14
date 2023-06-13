@@ -4386,6 +4386,9 @@ void cnss_pci_remove(struct pci_dev *pci_dev)
 	kfree(pci_priv->default_state);
 	pci_priv->default_state = NULL;
 
+	mhi_free_controller(pci_priv->mhi_ctrl);
+	pci_priv->mhi_ctrl = NULL;
+
 	cnss_pr_info("Pci device removed\n");
 }
 EXPORT_SYMBOL(cnss_pci_remove);
