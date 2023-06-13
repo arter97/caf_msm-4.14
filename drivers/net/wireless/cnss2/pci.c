@@ -4339,6 +4339,9 @@ unregister_subsys:
 	devm_kfree(&pci_dev->dev, pci_priv);
 	cnss_set_pci_priv(pci_dev, NULL);
 	plat_priv->bus_priv = NULL;
+
+	kfree(pci_priv->default_state);
+	pci_priv->default_state = NULL;
 out:
 	return ret;
 }
@@ -4379,6 +4382,9 @@ void cnss_pci_remove(struct pci_dev *pci_dev)
 		cnss_pci_deinit_smmu(pci_priv);
 #endif
 	cnss_unregister_ramdump(plat_priv);
+
+	kfree(pci_priv->default_state);
+	pci_priv->default_state = NULL;
 
 	cnss_pr_info("Pci device removed\n");
 }
