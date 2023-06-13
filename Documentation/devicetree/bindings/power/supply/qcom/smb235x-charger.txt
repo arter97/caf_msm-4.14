@@ -61,6 +61,71 @@ Charger specific properties:
   Definition: The battery voltage threshold in uV for charger module to
               enter into inhibit mode (not charging).
 
+- qcom,jeita-soft-thresholds
+  Usage:      optional
+  Value_type: prop-encoded-array
+  Definition: A tuple with 2 elements and each of them specifies a 16-bit ADC
+              code corresponding to the battery soft JEITA thresholds:
+              <BATT_COLD_ADC_CODE,BATT_HOT_ADC_CODE>.
+
+- qcom,jeita-hard-thresholds
+  Usage:      optional
+  Value_type: prop-encoded-array
+  Definition: A tuple with 2 elements and each of them specifies a 16-bit ADC
+              code corresponding to the battery hard JEITA thresholds:
+              <BATT_TOO_COLD_ADC_CODE, BATT_TOO_HOT_ADC_CODE>.
+
+- qcom,jeita-soft-fcc-comp-ua:
+  Usage:      optional
+  Value_type: prop-encoded-array
+  Definition: A tuple with 2 elements and each of them specifies the battery
+              charging current compensation in uA unit based on the
+              total FCC when battery temperature falls in the soft JEITA range:
+              <BATT_COLD_FCC_COMP_UA, BATT_HOT_FCC_COMP_UA>
+
+- qcom,jeita-soft-fv-comp-uv:
+  Usage:      optional
+  Value_type: prop-encoded-array
+  Definition: A tuple with 2 elements and each of them specifies the Float
+              voltage compensation in uV unit based on the total FV when
+              battery temperature falls in the soft JEITA range:
+              <BATT_COLD_FV_COMP_UV, BATT_HOT_FV_COMP_UV>
+
+- qcom,jeita-fcc-ranges: Array of tuples in which a tuple describes a range
+                         data of sw-jeita FCC (full charging current) setting.
+                         A range contains following 3 integer elements:
+                         [0]: the low threshold of battery temperature in deci-degree;
+                         [1]: the high threshold of battery temperature in deci-degree;
+                         [2]: the FCC in uA when battery temperature falls between
+                              the low and high thresholds.
+                         The threshold values in range should be in ascending
+                         and shouldn't overlap. It support 8 ranges at max.
+
+- qcom,jeita-fv-ranges: Array of tuples in which a tuple describes a range
+                        data of sw-jeita FV (float voltage) setting.
+                        A range contains following 3 integer elements:
+                        [0]: the low threshold of battery temperature in deci-degree;
+                        [1]: the high threshold of battery temperature in deci-degree;
+                        [3]: the FV in uV when battery temperature falls between
+                             the low and high thresholds.
+                        The threshold values in range should be in ascending
+                        and shouldn't overlap. It support 8 ranges at max.
+
+- qcom,step-chg-ranges: Array of tuples in which a tuple describes a range
+                        data of step charging setting.
+                        A range contains following 3 integer elements:
+                        [0]: the low threshold of battery voltage in uV
+                             or SoC (State of Charge) in percentage when
+                             SoC based step charge is used;
+                        [1]: the high threshold of battery voltage in uV
+                             or SoC in percentage when SoC based step charge
+                             is used;
+                        [2]: the FCC (full charging current) in uA when battery
+                             voltage or SoC falls between the low and high
+                             thresholds.
+                        The threshold values in range should be in ascending
+                        and shouldn't overlap. It support 8 ranges at max.
+
 Peripheral specific properties:
 - interrupts
   Usage:      required
@@ -107,7 +172,25 @@ smb2352: qcom,smb2352@71 {
 		#address-cells = <1>;
 		#size-cells = <1>;
 		interrupt-parent = <&smb2352>;
-		tcpm-psy-name = "78b7000.i2c:qcom,smb2352@71:typec@1500";
+		tcpm-psy-name = "78b7000.i2c:qcom,smb2352@71:typec@1500";	
+
+		qcom,jeita-soft-thresholds = <0x27c1 0x128c>;
+		qcom,jeita-soft-fcc-comp-ua = <250000 200000>;
+		qcom,jeita-soft-fv-comp-uv = <400000 200000>;
+
+		qcom,jeita-hard-thresholds = <0x3257 0x127e>;
+
+		qcom,jeita-fcc-ranges = <0 150 1500000
+					151 445 3240000
+					446 450 1500000>;
+
+		qcom,jeita-fv-ranges = <0 150 7200000
+					151 445 8700000
+					446 450 7200000>;
+
+		qcom,step-chg-ranges = <7100000  7200000  1500000
+					7200001  8800000  3240000
+					8800001  8900000  3240000>;
 
 		interrupts = <0x10 0x0 IRQ_TYPE_EDGE_RISING>,
 			<0x10 0x1 IRQ_TYPE_EDGE_RISING>,
