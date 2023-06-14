@@ -30,6 +30,11 @@
 #define CURRENT_STEP_MA		50
 #define MICRO_TO_MILLI		1000
 #define DELAY_WORK_TIME_MS	10000
+#define BATT_HOT_DECIDEGREE_MAX	600
+
+#define MAX_STEP_CHG_ENTRIES	8
+#define HW_JEITA_LEVELS		4
+#define HW_JEITA_FV_STEP_MV	10
 
 #define CDP_CURRENT_UA		1500000
 #define DCP_CURRENT_UA		1500000
@@ -41,6 +46,26 @@
 #define VOLTAGE_FORCE_5V_UV	5000000
 #define VOLTAGE_FORCE_9V_UV	9000000
 #define VOLTAGE_FORCE_12V_UV	12000000
+
+struct range_data {
+	int low_threshold;
+	int high_threshold;
+	unsigned int value;
+};
+
+struct ranges {
+	struct range_data data[MAX_STEP_CHG_ENTRIES];
+	unsigned char range_count;
+};
+
+struct step_chg_jeita_params {
+	int hw_jeita_thresholds[HW_JEITA_LEVELS];
+	int hw_jeita_fcc_comp_ua[2];
+	int hw_jeita_fv_comp_uv[2];
+	struct ranges sw_jeita_fcc_cfg;
+	struct ranges sw_jeita_fv_cfg;
+	struct ranges step_fcc_cfg;
+};
 
 struct smb235x_irq_data {
 	void *parent_data;
@@ -76,6 +101,7 @@ struct smb235x_chg_chip {
 	struct power_supply *batt_psy;
 	struct power_supply *usb_psy;
 	struct work_struct status_change_work;
+	struct step_chg_jeita_params *step_chg_jeita;
 	struct delayed_work smb235x_update_work;
 	struct power_supply *bms_psy;
 	struct power_supply *tcpm_psy;
@@ -98,7 +124,19 @@ struct smb235x_chg_chip {
 	int based_hvdcp_voltage_uv;
 	bool pd_active;
 	char tcpm_full_psy_name[64];
+	bool sw_jeita_enable;
+	bool step_chgr_enable;
 };
+
+static bool is_between(int value, int left, int right)
+{
+	if (left >= right && left >= value && value >= right)
+		return true;
+	if (left <= right && left <= value && value <= right)
+		return true;
+
+	return false;
+}
 
 static int smb235x_set_icl_sw(struct smb235x_chg_chip *chip, int icl_ma)
 {
@@ -358,12 +396,152 @@ static irqreturn_t smb235x_default_irq_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t smb235x_batt_temp_changed_irq_handler(int irq, void *data)
+static int smb235x_set_fv(struct smb235x_chg_chip *chip, int vfloat_uv)
+{
+	int rc;
+	u8 reg_val = 0;
+
+	reg_val = (vfloat_uv / MICRO_TO_MILLI - FLOAT_VOLTAGE_BASE_MV) /
+		FLOAT_VOLTAGE_STEP_MV;
+	rc = regmap_write(chip->regmap, CHGR_FLOAT_VOLTAGE_CFG_REG, reg_val);
+	if (rc < 0)
+		dev_err(chip->dev, "Failed to write float voltage rc = %d\n", rc);
+
+	return rc;
+}
+
+static int smb235x_set_fcc(struct smb235x_chg_chip *chip, int fcc_ua)
+{
+	int rc;
+	u8 reg_val = 0;
+
+	reg_val = (fcc_ua / MICRO_TO_MILLI / CURRENT_STEP_MA) + 1;
+	rc = regmap_write(chip->regmap, CHGR_FAST_CHARGE_CURRENT_CFG_REG,
+			reg_val);
+	if (rc < 0)
+		dev_err(chip->dev, "Faile to write fast charge current rc = %d\n", rc);
+
+	return rc;
+}
+
+static int smb235x_get_step_chg_zone(struct smb235x_chg_chip *chip, int fv)
+{
+	int i, low_volt_uv, high_volt_uv;
+	int step_range_count = chip->step_chg_jeita->step_fcc_cfg.range_count;
+
+	for (i = 0; i < step_range_count; i++) {
+		low_volt_uv = chip->step_chg_jeita->step_fcc_cfg.data[i].low_threshold;
+		high_volt_uv = chip->step_chg_jeita->step_fcc_cfg.data[i].high_threshold;
+		if (is_between(fv, low_volt_uv, high_volt_uv))
+			break;
+	}
+
+	if (i == step_range_count) {
+		dev_err(chip->dev, "Couldn't get the step-charging zone according to fv %d\n", fv);
+		return -EINVAL;
+	}
+
+	return i;
+}
+
+static int smb235x_get_jeita_zone(struct smb235x_chg_chip *chip, int temp)
+{
+	int i, low_decidegree, high_decidegree;
+	int jeita_range_count = chip->step_chg_jeita->sw_jeita_fcc_cfg.range_count;
+
+	for (i = 0; i < jeita_range_count; i++) {
+		low_decidegree = chip->step_chg_jeita->sw_jeita_fcc_cfg.data[i].low_threshold;
+		high_decidegree = chip->step_chg_jeita->sw_jeita_fcc_cfg.data[i].high_threshold;
+		if (is_between(temp, low_decidegree, high_decidegree))
+			break;
+	}
+
+	if (i == jeita_range_count) {
+		dev_err(chip->dev, "Couldn't get the jeita zone according to temp %d\n", temp);
+		return -EINVAL;
+	}
+
+	return i;
+}
+
+static int smb235x_update_sw_jeita(struct smb235x_chg_chip *chip)
+{
+	union power_supply_propval pval;
+	int rc;
+	int temp;
+	int sw_jeita_zone = 0;
+	int fastchg_current_ua;
+	int vfloat_uv;
+
+	if (!chip->sw_jeita_enable)
+		return 0;
+
+	rc = smb235x_get_prop_from_bms(chip, POWER_SUPPLY_PROP_TEMP, &pval);
+	if (rc < 0) {
+		dev_err(chip->dev, "Failed to get POWER_SUPPLY_PROP_TEMP from bms rc = %d\n", rc);
+		return rc;
+	}
+
+	temp = pval.intval;
+
+	sw_jeita_zone = smb235x_get_jeita_zone(chip, temp);
+	if (sw_jeita_zone < 0)
+		return sw_jeita_zone;
+
+	fastchg_current_ua = chip->step_chg_jeita->sw_jeita_fcc_cfg.data[sw_jeita_zone].value;
+	vfloat_uv = chip->step_chg_jeita->sw_jeita_fv_cfg.data[sw_jeita_zone].value;
+
+	rc = smb235x_set_fcc(chip, fastchg_current_ua);
+	if (rc < 0)
+		dev_err(chip->dev, "Failed to set fast charge current rc = %d\n", rc);
+
+	smb235x_set_fv(chip, vfloat_uv);
+	if (rc < 0)
+		dev_err(chip->dev, "Failed to set float voltage rc = %d\n", rc);
+
+	return rc;
+}
+
+static int smb235x_update_step_chg(struct smb235x_chg_chip *chip)
+{
+	union power_supply_propval pval;
+	int rc;
+	int fv_uv = 0;
+	int step_chg_zone = 0;
+	int fastchg_current_ua;
+
+	if (!chip->step_chgr_enable)
+		return 0;
+
+	rc = smb235x_get_prop_from_bms(chip, POWER_SUPPLY_PROP_VOLTAGE_NOW, &pval);
+	if (rc < 0) {
+		dev_err(chip->dev, "Failed to get POWER_SUPPLY_PROP_VOLTAGE_NOW from bms rc = %d\n", rc);
+		return rc;
+	}
+
+	fv_uv = pval.intval;
+
+	step_chg_zone = smb235x_get_step_chg_zone(chip, fv_uv);
+	if (step_chg_zone < 0)
+		return step_chg_zone;
+
+	fastchg_current_ua = chip->step_chg_jeita->step_fcc_cfg.data[step_chg_zone].value;
+
+	smb235x_set_fcc(chip, fastchg_current_ua);
+	if (rc < 0)
+		dev_err(chip->dev, "Failed to set fast charge current rc = %d\n", rc);
+
+	return rc;
+}
+
+irqreturn_t smb235x_batt_temp_changed_irq_handler(int irq, void *data)
 {
 	struct smb235x_irq_data *irq_data = data;
 	struct smb235x_chg_chip *chip = irq_data->parent_data;
 
 	dev_dbg(chip->dev, "IRQ: %s\n", irq_data->name);
+
+	smb235x_update_sw_jeita(chip);
 	power_supply_changed(chip->batt_psy);
 
 	return IRQ_HANDLED;
@@ -1012,6 +1190,224 @@ static int smb235x_config_inhibit(struct smb235x_chg_chip *chip)
 	return rc;
 }
 
+static int read_range_data_from_node(struct device_node *node,
+		const char *prop_str, struct ranges *ranges,
+		int max_threshold, u32 max_value)
+{
+	int rc = 0, i, length, per_tuple_length, tuples;
+
+	if (!node || !prop_str || !ranges) {
+		pr_err("Invalid parameters passed\n");
+		return -EINVAL;
+	}
+
+	rc = of_property_count_elems_of_size(node, prop_str, sizeof(u32));
+	if (rc < 0) {
+		pr_err("Count %s failed, rc=%d\n", prop_str, rc);
+		return rc;
+	}
+
+	length = rc;
+	per_tuple_length = sizeof(struct range_data) / sizeof(u32);
+	if (length % per_tuple_length) {
+		pr_err("%s length (%d) should be multiple of %d\n",
+			   prop_str, length, per_tuple_length);
+		return -EINVAL;
+	}
+
+	tuples = length / per_tuple_length;
+	if (tuples > MAX_STEP_CHG_ENTRIES) {
+		pr_err("too many entries(%d), only %d allowed\n",
+			   tuples, MAX_STEP_CHG_ENTRIES);
+		return -EINVAL;
+	}
+
+	rc = of_property_read_u32_array(node, prop_str, (u32 *)ranges->data,
+			length);
+	if (rc < 0) {
+		pr_err("Read %s failed, rc=%d\n", prop_str, rc);
+		return rc;
+	}
+
+	for (i = 0; i < tuples; i++) {
+		if (ranges->data[i].low_threshold >
+				ranges->data[i].high_threshold) {
+			pr_err("%s thresholds should be in ascendant ranges data\n", prop_str);
+			rc = -EINVAL;
+			goto clean;
+		}
+
+		if (i != 0) {
+			if (ranges->data[i - 1].high_threshold >
+					ranges->data[i].low_threshold) {
+				pr_err("%s thresholds should be in ascendant ranges data\n", prop_str);
+				rc = -EINVAL;
+				goto clean;
+			}
+		}
+
+		if (ranges->data[i].low_threshold > max_threshold)
+			ranges->data[i].low_threshold = max_threshold;
+		if (ranges->data[i].high_threshold > max_threshold)
+			ranges->data[i].high_threshold = max_threshold;
+		if (ranges->data[i].value > max_value)
+			ranges->data[i].value = max_value;
+	}
+
+	ranges->range_count = tuples;
+	return rc;
+clean:
+	memset(ranges, 0, tuples * sizeof(struct range_data));
+	return rc;
+}
+
+static int smb235x_config_jeita_step_chg(struct smb235x_chg_chip *chip)
+{
+	struct device_node *node = chip->dev->of_node;
+	int rc = 0;
+	u8 val = 0;
+	u32 temp[2];
+	u16 jeita_threshold;
+	int i = 0;
+	bool hw_jeita_thresh_valid = true;
+
+	chip->step_chg_jeita = devm_kzalloc(chip->dev,
+			sizeof(*chip->step_chg_jeita), GFP_KERNEL);
+	if (!chip->step_chg_jeita)
+		return -ENOMEM;
+
+	/* HW managed JEITA settings */
+	rc = of_property_read_u32_array(node,
+			"qcom,jeita-soft-thresholds", temp, 2);
+	if (!rc) {
+		chip->step_chg_jeita->hw_jeita_thresholds[0] = temp[1];
+		chip->step_chg_jeita->hw_jeita_thresholds[1] = temp[0];
+	} else {
+		hw_jeita_thresh_valid = false;
+		dev_dbg(chip->dev, "Failed to read jeita cool and warm value from battery profile, rc=%d\n", rc);
+	}
+
+	rc = of_property_read_u32_array(node,
+			"qcom,jeita-hard-thresholds", temp, 2);
+	if (!rc) {
+		chip->step_chg_jeita->hw_jeita_thresholds[2] = temp[1];
+		chip->step_chg_jeita->hw_jeita_thresholds[3] = temp[0];
+	} else {
+		hw_jeita_thresh_valid = false;
+		dev_dbg(chip->dev, "Failed to read jeita cold and hot value from battery profile, rc=%d\n", rc);
+	}
+
+	if (hw_jeita_thresh_valid) {
+		for (i = 0; i < 4; i++) {
+			jeita_threshold = chip->step_chg_jeita->hw_jeita_thresholds[i] & 0xffff;
+			jeita_threshold = ((jeita_threshold & 0xFF00) >> 8) |
+				((jeita_threshold & 0xFF) << 8);
+
+			rc = regmap_bulk_write(chip->regmap,
+					CHGR_JEITA_THRESHOLD_BASE_REG(i),
+					(u8 *)&jeita_threshold, 2);
+			if (rc < 0) {
+				dev_err(chip->dev, "Failed to set CHGR_STEP_CHG_THRESHOLD_BASE_REG(%d) rc = %d\n", i, rc);
+				return rc;
+			}
+		}
+	}
+
+	rc = of_property_read_u32_array(node, "qcom,jeita-soft-fcc-comp-ua", temp, 2);
+	if (!rc && hw_jeita_thresh_valid) {
+		chip->step_chg_jeita->hw_jeita_fcc_comp_ua[0] = temp[1];
+		chip->step_chg_jeita->hw_jeita_fcc_comp_ua[1] = temp[0];
+
+		val = chip->step_chg_jeita->hw_jeita_fcc_comp_ua[0] / MICRO_TO_MILLI / CURRENT_STEP_MA;
+		rc = regmap_write(chip->regmap, CHGR_JEITA_CCCOMP_HOT_CFG, val);
+		if(rc < 0) {
+			dev_err(chip->dev, "Failed to write jeita charge current compensation in hot soft-limit rc = %d\n", rc);
+			return rc;
+		}
+
+		val = chip->step_chg_jeita->hw_jeita_fcc_comp_ua[1] / MICRO_TO_MILLI / CURRENT_STEP_MA;
+		rc = regmap_write(chip->regmap, CHGR_JEITA_CCCOMP_COLD_CFG, val);
+		if(rc < 0) {
+			dev_err(chip->dev, "Failed to write jeita charge current compensation in cold soft-limit rc = %d\n", rc);
+			return rc;
+		}
+	}
+
+	rc = of_property_read_u32_array(node, "qcom,jeita-soft-fv-comp-uv", temp, 2);
+	if (!rc && hw_jeita_thresh_valid) {
+		chip->step_chg_jeita->hw_jeita_fv_comp_uv[0] = temp[1];
+		chip->step_chg_jeita->hw_jeita_fv_comp_uv[1] = temp[0];
+
+		val = chip->step_chg_jeita->hw_jeita_fv_comp_uv[1] / MICRO_TO_MILLI / HW_JEITA_FV_STEP_MV;
+		rc = regmap_write(chip->regmap, CHGR_JEITA_FVCOMP_COLD_CFG, val);
+		if(rc < 0) {
+			dev_err(chip->dev, "Failed to write jeita float voltage compensation in cold soft-limit rc = %d\n", rc);
+			return rc;
+		}
+
+		val = chip->step_chg_jeita->hw_jeita_fv_comp_uv[0] / MICRO_TO_MILLI / HW_JEITA_FV_STEP_MV;
+		rc = regmap_write(chip->regmap, CHGR_JEITA_FVCOMP_HOT_CFG, val);
+		if(rc < 0) {
+			dev_err(chip->dev, "Failed to write jeita float voltage compensation in hot soft-limit rc = %d\n", rc);
+			return rc;
+		}
+	}
+
+	/* SW managed JEITA settings */
+	rc = read_range_data_from_node(node, "qcom,jeita-fcc-ranges",
+			&chip->step_chg_jeita->sw_jeita_fcc_cfg,
+			BATT_HOT_DECIDEGREE_MAX, chip->fastchg_curr_ua);
+	if (rc < 0) {
+		dev_dbg(chip->dev, "Failed to read qcom,jeita-fcc-ranges from battery profile, rc=%d\n", rc);
+		chip->sw_jeita_enable = false;
+	} else {
+		dev_info(chip->dev, "jeita-fcc-ranges:\n");
+		chip->sw_jeita_enable = true;
+		for (i = 0; i < chip->step_chg_jeita->sw_jeita_fcc_cfg.range_count; i++) {
+			dev_info(chip->dev, "%d %d %d\n",
+				chip->step_chg_jeita->sw_jeita_fcc_cfg.data[i].low_threshold,
+				chip->step_chg_jeita->sw_jeita_fcc_cfg.data[i].high_threshold,
+				chip->step_chg_jeita->sw_jeita_fcc_cfg.data[i].value);
+		}
+	}
+
+	rc = read_range_data_from_node(node, "qcom,jeita-fv-ranges",
+			&chip->step_chg_jeita->sw_jeita_fv_cfg,
+			BATT_HOT_DECIDEGREE_MAX, chip->float_volt_uv);
+	if (rc < 0) {
+		dev_dbg(chip->dev, "Failed to read qcom,jeita-fv-ranges from battery profile, rc=%d\n", rc);
+		chip->sw_jeita_enable = false;
+	} else {
+		dev_info(chip->dev, "jeita-fv-ranges:\n");
+		for (i = 0; i < chip->step_chg_jeita->sw_jeita_fv_cfg.range_count; i++) {
+			dev_info(chip->dev, "%d %d %d\n",
+				chip->step_chg_jeita->sw_jeita_fv_cfg.data[i].low_threshold,
+				chip->step_chg_jeita->sw_jeita_fv_cfg.data[i].high_threshold,
+				chip->step_chg_jeita->sw_jeita_fv_cfg.data[i].value);
+		}
+	}
+
+	/* Set step chgr */
+	rc = read_range_data_from_node(node, "qcom,step-chg-ranges",
+			&chip->step_chg_jeita->step_fcc_cfg,
+			chip->float_volt_uv, chip->fastchg_curr_ua);
+	if (rc < 0) {
+		dev_dbg(chip->dev, "Failed to read qcom,step-chg-ranges rc = %d\n", rc);
+		chip->step_chgr_enable = false;
+	} else {
+		dev_info(chip->dev, "step-chg-ranges:\n");
+		chip->step_chgr_enable = true;
+		for (i = 0; i < chip->step_chg_jeita->step_fcc_cfg.range_count; i++) {
+			dev_info(chip->dev, "%d %d %d\n",
+				chip->step_chg_jeita->step_fcc_cfg.data[i].low_threshold,
+				chip->step_chg_jeita->step_fcc_cfg.data[i].high_threshold,
+				chip->step_chg_jeita->step_fcc_cfg.data[i].value);
+		}
+	}
+
+	return 0;
+}
+
 static int smb235x_chg_init(struct smb235x_chg_chip *chip)
 {
 	int rc;
@@ -1061,6 +1457,12 @@ static int smb235x_chg_init(struct smb235x_chg_chip *chip)
 	rc = smb235x_config_inhibit(chip);
 	if (rc < 0) {
 		dev_err(chip->dev, "Failed to config inhibit rc = %d\n", rc);
+		return rc;
+	}
+
+	rc = smb235x_config_jeita_step_chg(chip);
+	if (rc < 0) {
+		dev_err(chip->dev, "Failed to config jeita rc = %d\n", rc);
 		return rc;
 	}
 
@@ -1625,34 +2027,6 @@ static int smb235x_batt_get_prop(struct power_supply *psy,
 	return 0;
 }
 
-static int smb235x_set_fv(struct smb235x_chg_chip *chip, int vfloat_uv)
-{
-	int rc;
-	u8 reg_val = 0;
-
-	reg_val = (vfloat_uv / MICRO_TO_MILLI - FLOAT_VOLTAGE_BASE_MV) /
-		FLOAT_VOLTAGE_STEP_MV;
-	rc = regmap_write(chip->regmap, CHGR_FLOAT_VOLTAGE_CFG_REG, reg_val);
-	if (rc < 0)
-		dev_err(chip->dev, "Failed to write float voltage rc = %d\n", rc);
-
-	return rc;
-}
-
-static int smb235x_set_fcc(struct smb235x_chg_chip *chip, int fcc_ua)
-{
-	int rc;
-	u8 reg_val = 0;
-
-	reg_val = (fcc_ua / MICRO_TO_MILLI / CURRENT_STEP_MA) + 1;
-	rc = regmap_write(chip->regmap, CHGR_FAST_CHARGE_CURRENT_CFG_REG,
-			reg_val);
-	if (rc < 0)
-		dev_err(chip->dev, "Faile to write fast charge current rc = %d\n", rc);
-
-	return rc;
-}
-
 static int smb235x_batt_set_prop(struct power_supply *psy,
 		enum power_supply_property prop,
 		const union power_supply_propval *pval)
@@ -1918,6 +2292,8 @@ static void smb235x_update_work(struct work_struct *work)
 
 	smb235x_update_soc(chip);
 	smb235x_update_fv_fcc(chip);
+	smb235x_update_sw_jeita(chip);
+	smb235x_update_step_chg(chip);
 
 	schedule_delayed_work(&chip->smb235x_update_work, msecs_to_jiffies(DELAY_WORK_TIME_MS));
 }
