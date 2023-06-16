@@ -1,4 +1,5 @@
 /* Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -26,6 +27,7 @@
 
 #define QMI_CDEV_DRIVER		"qmi-cooling-device"
 #define QMI_TMD_RESP_TOUT	msecs_to_jiffies(100)
+#define QMI_TMD_TXN_WAIT_TOUT	msecs_to_jiffies(3000)
 #define QMI_CLIENT_NAME_LENGTH	40
 
 enum qmi_device_type {
@@ -384,7 +386,7 @@ static int verify_devices_and_register(struct qmi_tmd_instance *tmd)
 		goto reg_exit;
 	}
 
-	ret = qmi_txn_wait(&txn, QMI_TMD_RESP_TOUT);
+	ret = qmi_txn_wait(&txn, QMI_TMD_TXN_WAIT_TOUT);
 	if (ret < 0) {
 		pr_err("Transaction wait error for inst_id:0x%x ret:%d\n",
 			tmd->inst_id, ret);
@@ -483,7 +485,7 @@ static int thermal_qmi_new_server(struct qmi_handle *qmi,
 	mutex_lock(&tmd->mutex);
 	kernel_connect(qmi->sock, (struct sockaddr *)&sq, sizeof(sq), 0);
 	mutex_unlock(&tmd->mutex);
-	queue_work(system_highpri_wq, &tmd->svc_arrive_work);
+	schedule_work(&tmd->svc_arrive_work);
 
 	return 0;
 }
