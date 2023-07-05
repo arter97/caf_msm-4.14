@@ -594,6 +594,14 @@
 			reg = <0 0x9e400000 0 0x1400000>;
 		};
 
+		user_contig_mem: user_contig_region {
+			compatible = "shared-dma-pool";
+			alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
+			reusable;
+			alignment = <0x0 0x400000>;
+			size = <0x0 0x1000000>;
+		};
+
 		cdsp_sec_mem: cdsp_sec_regions@0x9f800000 {
 			compatible = "removed-dma-pool";
 			no-map;
@@ -2782,7 +2790,7 @@
 		qcom,stall-cycle-ev = <0xE7>;
 		qcom,core-dev-table =
 			<  576000  300000000 >,
-			< 1017600  556800000 >,
+			< 1017600  576000000 >,
 			< 1209660  806400000 >,
 			< 1516800  940800000 >,
 			< 1804800 1363200000 >;
@@ -2802,7 +2810,7 @@
 		qcom,cachemiss-ev = <0x17>;
 		qcom,stall-cycle-ev = <0x15E>;
 		qcom,core-dev-table =
-			< 1017600  556800000 >,
+			< 1017600  576000000 >,
 			< 1209600  806400000 >,
 			< 1516800  940800000 >,
 			< 1708800 1209600000 >,
