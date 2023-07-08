@@ -714,7 +714,8 @@ static int smi230_gyro_early_buff_init(struct smi230_client_data *client_data)
 
 	mutex_init(&client_data->gyro_sensor_buff);
 
-        p_smi230_dev->gyro_cfg.odr = SMI230_GYRO_BW_32_ODR_100_HZ;
+
+	p_smi230_dev->gyro_cfg.odr = SMI230_GYRO_BW_32_ODR_100_HZ;
         p_smi230_dev->gyro_cfg.range = SMI230_GYRO_RANGE_125_DPS;
         err |= smi230_gyro_set_meas_conf(p_smi230_dev);
         smi230_delay(100);
@@ -722,6 +723,8 @@ static int smi230_gyro_early_buff_init(struct smi230_client_data *client_data)
 	/* gyro driver should be initialized before acc */
 	p_smi230_dev->gyro_cfg.power = SMI230_GYRO_PM_NORMAL;
 	smi230_gyro_set_power_mode(p_smi230_dev);
+	PINFO("GYRO FIFO set water mark");
+	err |= smi230_gyro_set_fifo_wm(10, p_smi230_dev);
 	client_data->timestamp_old = smi230_gyro_get_alarm_timestamp();
 	is_gyro_ready = false;
 	mod_timer(&pm_mode_timer, jiffies + msecs_to_jiffies(600));
@@ -798,23 +801,24 @@ static void smi230_gyro_fifo_handle(
 {
 	struct smi230_fifo_frame fifo;
 	int err = 0, i;
-	uint8_t fifo_length, extract_length;
+	uint8_t fifo_frames;
+	uint16_t fifo_bytes;
 	uint16_t step = 1;
 	struct timespec ts;
 	uint64_t data_ts = 0;
 
-	err = smi230_gyro_get_fifo_length(&fifo_length, p_smi230_dev);
+	err = smi230_gyro_get_fifo_length(&fifo_bytes, p_smi230_dev);
 	if (err != SMI230_OK) {
 		PERR("FIFO get length error!");
 		return;
 	}
 
 #if 0
-	PINFO("GYRO FIFO length %d", fifo_length);
+	PINFO("GYRO FIFO length %d", fifo_bytes);
 #endif
 
 	fifo.data = fifo_buf;
-	fifo.length = fifo_length;
+	fifo.length = fifo_bytes;
 	err = smi230_gyro_read_fifo_data(&fifo, p_smi230_dev);
 	if (err != SMI230_OK) {
 		PERR("FIFO read data error %d", err);
@@ -828,20 +832,22 @@ static void smi230_gyro_fifo_handle(
 	input_sync(client_data->input);
 #endif
 
-	extract_length = SMI230_MAX_GYRO_FIFO_FRAME;
 	err = smi230_gyro_extract_fifo(fifo_gyro_data,
-                            &extract_length,
+                            &fifo_frames,
                             &fifo,
                             p_smi230_dev);
 
+#if 0
+	PINFO("GYRO FIFO FRAMES %d", fifo_frames);
+#endif
 	if (is_gyro_ready == false) {
-		PINFO("gyro not ready, discard data of first 200ms period after active");
+		PINFO("gyro not ready, discard data of first 600ms period after active");
 		client_data->timestamp_old = client_data->timestamp;
 		return;
 	}
-	for (i = 0; i < extract_length; i++) {
+	for (i = 0; i < fifo_frames; i++) {
 		data_ts = client_data->timestamp_old +
-			step * div_s64((client_data->timestamp - client_data->timestamp_old), extract_length);
+			step * div_s64((client_data->timestamp - client_data->timestamp_old), fifo_frames);
 		step++;
 		ts = ns_to_timespec(data_ts);
 		input_event(client_data->input, EV_MSC, MSC_TIMESTAMP, ts.tv_sec);
@@ -1052,7 +1058,7 @@ int smi230_gyro_probe(struct device *dev, struct smi230_dev *smi230_dev)
 	fifo_config.wm_en = 0x88;
 
 	PINFO("GYRO FIFO set water mark");
-	err |= smi230_gyro_set_fifo_wm(60, p_smi230_dev);
+	err |= smi230_gyro_set_fifo_wm(10, p_smi230_dev);
 #endif
 #ifdef CONFIG_SMI230_GYRO_FIFO_FULL
 	PINFO("GYRO FIFO full enabled");

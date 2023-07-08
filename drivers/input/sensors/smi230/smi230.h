@@ -620,7 +620,7 @@ int8_t smi230_acc_set_fifo_down_sample(uint8_t fifo_downs, const struct smi230_d
  * @retval SMI230_OK - Success.
  * @retval SMI230_E_NULL_PTR - Error: Null pointer error
  */
-int8_t smi230_gyro_get_fifo_length(uint8_t *fifo_length, const struct smi230_dev *dev);
+int8_t smi230_gyro_get_fifo_length(uint16_t *fifo_bytes, const struct smi230_dev *dev);
 
 /*!
  * @brief This API reads FIFO data.
