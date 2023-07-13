@@ -1,4 +1,5 @@
 /* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -342,6 +343,10 @@ void bgrsb_rx_msg(void *data, int len)
 	struct bgrsb_priv *dev =
 		container_of(bgrsb_drv, struct bgrsb_priv, lhndl);
 
+	if (len > BGRSB_GLINK_INTENT_SIZE) {
+		pr_err("Invalid bgrsb glink intent size\n");
+		return;
+	}
 	dev->bg_resp_cmplt = true;
 	wake_up(&dev->link_state_wait);
 	memcpy(dev->rx_buf, data, len);
