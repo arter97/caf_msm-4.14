@@ -4042,6 +4042,7 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 
 	/* Read en_wol from device tree */
 	priv->en_wol = of_property_read_bool(np, "enable-wol");
+	priv->avoid_reset = 0;
 
 	if (pparams.is_valid_mac_addr) {
 		ether_addr_copy(dev_addr, pparams.mac_addr);
@@ -4301,7 +4302,10 @@ static int qcom_ethqos_resume(struct device *dev)
 			      RGMII_IO_MACRO_CONFIG);
 		ETHQOSINFO("Loopback EN Enabled\n");
 	}
+
+	priv->avoid_reset = 1;
 	ret = stmmac_resume(dev);
+	priv->avoid_reset = 0;
 	if (ethqos->phy_state == PHY_IS_OFF) {
 		//Disable  LOOPBACK_EN
 		rgmii_updatel(ethqos, RGMII_CONFIG_LOOPBACK_EN,

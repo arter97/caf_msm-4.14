@@ -179,6 +179,7 @@ struct stmmac_priv {
 	unsigned long state;
 	struct workqueue_struct *wq;
 	struct work_struct service_task;
+	bool avoid_reset;
 };
 
 enum stmmac_state {

@@ -2428,10 +2428,12 @@ static int stmmac_init_dma_engine(struct stmmac_priv *priv)
 	if (priv->extend_desc && (priv->mode == STMMAC_RING_MODE))
 		atds = 1;
 
-	ret = priv->hw->dma->reset(priv->ioaddr);
-	if (ret) {
-		dev_err(priv->device, "Failed to reset the dma\n");
-		return ret;
+	if (!priv->avoid_reset) {
+		ret = priv->hw->dma->reset(priv->ioaddr);
+		if (ret) {
+			dev_err(priv->device, "Failed to reset the dma\n");
+			return ret;
+		}
 	}
 
 	if (priv->synopsys_id >= DWMAC_CORE_4_00) {
