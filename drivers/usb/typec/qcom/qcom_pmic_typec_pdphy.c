@@ -37,7 +37,7 @@ struct pmic_typec_pdphy {
 	struct work_struct		reset_work;
 	struct work_struct		receive_work;
 	struct regulator		*vdd_pdphy;
-	spinlock_t			lock;		/* Register atomicity */
+	struct mutex			lock;		/* Register atomicity */
 };
 
 static void qcom_pmic_typec_pdphy_reset_on(struct pmic_typec_pdphy *pmic_typec_pdphy)
@@ -77,14 +77,13 @@ static void qcom_pmic_typec_pdphy_sig_reset_work(struct work_struct *work)
 {
 	struct pmic_typec_pdphy *pmic_typec_pdphy = container_of(work, struct pmic_typec_pdphy,
 						     reset_work);
-	unsigned long flags;
 
-	spin_lock_irqsave(&pmic_typec_pdphy->lock, flags);
+	mutex_lock(&pmic_typec_pdphy->lock);
 
 	qcom_pmic_typec_pdphy_reset_on(pmic_typec_pdphy);
 	qcom_pmic_typec_pdphy_reset_off(pmic_typec_pdphy);
 
-	spin_unlock_irqrestore(&pmic_typec_pdphy->lock, flags);
+	mutex_unlock(&pmic_typec_pdphy->lock);
 
 	tcpm_pd_hard_reset(pmic_typec_pdphy->tcpm_port);
 }
@@ -120,10 +119,9 @@ qcom_pmic_typec_pdphy_pd_transmit_signal(struct pmic_typec_pdphy *pmic_typec_pdp
 {
 	struct device *dev = pmic_typec_pdphy->dev;
 	unsigned int val;
-	unsigned long flags;
 	int ret;
 
-	spin_lock_irqsave(&pmic_typec_pdphy->lock, flags);
+	mutex_lock(&pmic_typec_pdphy->lock);
 
 	/* Clear TX control register */
 	ret = qcom_pmic_typec_pdphy_clear_tx_control_reg(pmic_typec_pdphy);
@@ -143,7 +141,7 @@ qcom_pmic_typec_pdphy_pd_transmit_signal(struct pmic_typec_pdphy *pmic_typec_pdp
 			   pmic_typec_pdphy->base + USB_PDPHY_TX_CONTROL_REG, val);
 
 done:
-	spin_unlock_irqrestore(&pmic_typec_pdphy->lock, flags);
+	mutex_unlock(&pmic_typec_pdphy->lock);
 
 	dev_vdbg(dev, "pd_transmit_signal: type %d negotiate_rev %d send %d\n",
 		 type, negotiated_rev, ret);
@@ -159,10 +157,9 @@ qcom_pmic_typec_pdphy_pd_transmit_payload(struct pmic_typec_pdphy *pmic_typec_pd
 {
 	struct device *dev = pmic_typec_pdphy->dev;
 	unsigned int val, hdr_len, txbuf_len, txsize_len;
-	unsigned long flags;
 	int ret;
 
-	spin_lock_irqsave(&pmic_typec_pdphy->lock, flags);
+	mutex_lock(&pmic_typec_pdphy->lock);
 
 	ret = regmap_read(pmic_typec_pdphy->regmap,
 			  pmic_typec_pdphy->base + USB_PDPHY_RX_ACKNOWLEDGE_REG,
@@ -224,7 +221,7 @@ qcom_pmic_typec_pdphy_pd_transmit_payload(struct pmic_typec_pdphy *pmic_typec_pd
 			   pmic_typec_pdphy->base + USB_PDPHY_TX_CONTROL_REG, val);
 
 done:
-	spin_unlock_irqrestore(&pmic_typec_pdphy->lock, flags);
+	mutex_unlock(&pmic_typec_pdphy->lock);
 
 	if (ret) {
 		dev_err(dev, "pd_transmit_payload: hdr %*ph data %*ph ret %d\n",
@@ -263,10 +260,9 @@ static void qcom_pmic_typec_pdphy_pd_receive(struct pmic_typec_pdphy *pmic_typec
 	struct device *dev = pmic_typec_pdphy->dev;
 	struct pd_message msg;
 	unsigned int size, rx_status;
-	unsigned long flags;
 	int ret;
 
-	spin_lock_irqsave(&pmic_typec_pdphy->lock, flags);
+	mutex_lock(&pmic_typec_pdphy->lock);
 
 	ret = regmap_read(pmic_typec_pdphy->regmap,
 			  pmic_typec_pdphy->base + USB_PDPHY_RX_SIZE_REG, &size);
@@ -298,7 +294,7 @@ static void qcom_pmic_typec_pdphy_pd_receive(struct pmic_typec_pdphy *pmic_typec
 			   pmic_typec_pdphy->base + USB_PDPHY_RX_ACKNOWLEDGE_REG, 0);
 
 done:
-	spin_unlock_irqrestore(&pmic_typec_pdphy->lock, flags);
+	mutex_unlock(&pmic_typec_pdphy->lock);
 
 	if (!ret) {
 		dev_vdbg(dev, "pd_receive: handing %d bytes to tcpm\n", size);
@@ -341,15 +337,14 @@ static irqreturn_t qcom_pmic_typec_pdphy_isr(int irq, void *dev_id)
 
 int qcom_pmic_typec_pdphy_set_pd_rx(struct pmic_typec_pdphy *pmic_typec_pdphy, bool on)
 {
-	unsigned long flags;
 	int ret;
 
-	spin_lock_irqsave(&pmic_typec_pdphy->lock, flags);
+	mutex_lock(&pmic_typec_pdphy->lock);
 
 	ret = regmap_write(pmic_typec_pdphy->regmap,
 			   pmic_typec_pdphy->base + USB_PDPHY_RX_ACKNOWLEDGE_REG, !on);
 
-	spin_unlock_irqrestore(&pmic_typec_pdphy->lock, flags);
+	mutex_unlock(&pmic_typec_pdphy->lock);
 
 	dev_dbg(pmic_typec_pdphy->dev, "set_pd_rx: %s\n", on ? "on" : "off");
 
@@ -360,10 +355,9 @@ int qcom_pmic_typec_pdphy_set_roles(struct pmic_typec_pdphy *pmic_typec_pdphy,
 				    bool data_role_host, bool power_role_src)
 {
 	struct device *dev = pmic_typec_pdphy->dev;
-	unsigned long flags;
 	int ret;
 
-	spin_lock_irqsave(&pmic_typec_pdphy->lock, flags);
+	mutex_lock(&pmic_typec_pdphy->lock);
 
 	ret = regmap_update_bits(pmic_typec_pdphy->regmap,
 				 pmic_typec_pdphy->base + USB_PDPHY_MSG_CONFIG_REG,
@@ -371,7 +365,7 @@ int qcom_pmic_typec_pdphy_set_roles(struct pmic_typec_pdphy *pmic_typec_pdphy,
 				 MSG_CONFIG_PORT_POWER_ROLE,
 				 data_role_host << 3 | power_role_src << 2);
 
-	spin_unlock_irqrestore(&pmic_typec_pdphy->lock, flags);
+	mutex_unlock(&pmic_typec_pdphy->lock);
 
 	dev_dbg(dev, "pdphy_set_roles: data_role_host=%d power_role_src=%d\n",
 		data_role_host, power_role_src);
@@ -504,7 +498,7 @@ int qcom_pmic_typec_pdphy_probe(struct platform_device *pdev,
 	pmic_typec_pdphy->regmap = regmap;
 	pmic_typec_pdphy->nr_irqs = res->nr_irqs;
 	pmic_typec_pdphy->irq_data = irq_data;
-	spin_lock_init(&pmic_typec_pdphy->lock);
+	mutex_init(&pmic_typec_pdphy->lock);
 	INIT_WORK(&pmic_typec_pdphy->reset_work, qcom_pmic_typec_pdphy_sig_reset_work);
 
 	for (i = 0; i < res->nr_irqs; i++, irq_data++) {
