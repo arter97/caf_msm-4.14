@@ -107,8 +107,8 @@ int dwc3_host_init(struct dwc3 *dwc)
 	if (dwc->xhci_imod_value) {
 		imod_prop.name  = "xhci-imod-value";
 		imod_prop.length  = sizeof(u32);
-		imod_prop.is_string = false;
 		imod_prop.is_array = false;
+		imod_prop.type = DEV_PROP_U32;
 		imod_prop.value.u32_data = dwc->xhci_imod_value;
 		props[prop_idx++] = imod_prop;
 	}
@@ -116,8 +116,8 @@ int dwc3_host_init(struct dwc3 *dwc)
 	if (dwc->core_id >= 0) {
 		core_id_prop.name  = "usb-core-id";
 		core_id_prop.length  = sizeof(u32);
-		core_id_prop.is_string = false;
 		core_id_prop.is_array = false;
+		core_id_prop.type = DEV_PROP_U32;
 		core_id_prop.value.u32_data = dwc->core_id;
 		props[prop_idx++] = core_id_prop;
 	}
