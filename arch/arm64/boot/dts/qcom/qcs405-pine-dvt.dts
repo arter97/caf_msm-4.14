@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: GPL-2.0-only
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- * 
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
  */
 
 /dts-v1/;
@@ -21,7 +21,13 @@
 };
 
 &i2c_2 {
-	status = "disabled";
+	qcom,clk-freq-out = <100000>;
+	status = "ok";
+
+	bq40z50@B {
+		compatible = "ti,bq40z50";
+		reg = <0x0B>;
+	};
 };
 
 &smp2p_sleepstate {
