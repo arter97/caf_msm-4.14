@@ -55,7 +55,9 @@ enum bq_fg_reg_idx {
 	BQ_FG_REG_SOC,		/* Relative State of Charge */
 	BQ_FG_REG_SOH,		/* State of Health */
 	BQ_FG_REG_DC,		/* Design Capacity */
-	BQ_FG_REG_MBA,		/* ManufacturerBlockAccess*/
+	BQ_FG_REG_MBA,		/* ManufacturerBlockAccess */
+	BQ_FG_REG_DCC,		/* Desired Charging Current */
+	BQ_FG_REG_DCV,		/* Desired Charging Voltage */
 	NUM_REGS,
 };
 
@@ -102,7 +104,9 @@ static u8 bq40z50_regs[NUM_REGS] = {
 	0x0D,	/* State of Charge */
 	0x4F,	/* State of Health */
 	0x18,	/* Design Capacity */
-	0x44,	/* ManufacturerBlockAccess*/
+	0x44,	/* ManufacturerBlockAccess */
+	0x14,	/* Desired Charging Current */
+	0x15,	/* Desired Charging Voltage */
 };
 
 struct bq_fg_chip {
@@ -141,6 +145,8 @@ struct bq_fg_chip {
 	int batt_volt;
 	int batt_temp;
 	int batt_curr;
+	int batt_chg_current;
+	int batt_chg_voltage;
 
 	int batt_cyclecnt;	/* cycle count */
 
@@ -594,6 +600,43 @@ static int fg_get_batt_capacity_level(struct bq_fg_chip *bq)
 
 }
 
+static int fg_read_desired_chg_current(struct bq_fg_chip *bq)
+{
+	int ret;
+	u16 chg_curr = 0;
+
+	if (bq->regs[BQ_FG_REG_DCC] == INVALID_REG_ADDR) {
+		bq_err("Desired Charging Current not supported!\n");
+		return -1;
+	}
+
+	ret = fg_read_word(bq, bq->regs[BQ_FG_REG_DCC], &chg_curr);
+	if (ret < 0) {
+		bq_err("could not read chg_curr, ret = %d\n", ret);
+		return ret;
+	}
+
+	return chg_curr;
+}
+
+static int fg_read_desired_chg_voltage(struct bq_fg_chip *bq)
+{
+	int ret;
+	u16 chg_volt = 0;
+
+	if (bq->regs[BQ_FG_REG_DCV] == INVALID_REG_ADDR) {
+		bq_err("Desired Charging Voltage not supported!\n");
+		return -1;
+	}
+
+	ret = fg_read_word(bq, bq->regs[BQ_FG_REG_DCV], &chg_volt);
+	if (ret < 0) {
+		bq_err("could not read chg_volt, ret = %d\n", ret);
+		return ret;
+	}
+
+	return chg_volt;
+}
 
 static enum power_supply_property fg_props[] = {
 	POWER_SUPPLY_PROP_STATUS,
@@ -608,6 +651,8 @@ static enum power_supply_property fg_props[] = {
 	POWER_SUPPLY_PROP_TECHNOLOGY,
 	POWER_SUPPLY_PROP_RESISTANCE_ID,
 	POWER_SUPPLY_PROP_UPDATE_NOW,
+	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX,
+	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE_MAX,
 };
 
 static int fg_get_property(struct power_supply *psy, enum power_supply_property psp,
@@ -715,6 +760,22 @@ static int fg_get_property(struct power_supply *psy, enum power_supply_property 
 		break;
 	case POWER_SUPPLY_PROP_UPDATE_NOW:
 		val->intval = 0;
+		break;
+	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
+		ret = fg_read_desired_chg_current(bq);
+		mutex_lock(&bq->data_lock);
+		if(ret >= 0)
+			bq->batt_chg_current = ret;
+		val->intval = bq->batt_chg_current * 1000;
+		mutex_unlock(&bq->data_lock);
+		break;
+	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE_MAX:
+		ret = fg_read_desired_chg_voltage(bq);
+		mutex_lock(&bq->data_lock);
+		if (ret >= 0)
+			bq->batt_chg_voltage = ret;
+		val->intval = bq->batt_chg_voltage * 1000;
+		mutex_unlock(&bq->data_lock);
 		break;
 
 	default:
@@ -909,10 +970,13 @@ static void fg_update_status(struct bq_fg_chip *bq)
 	fg_read_current(bq, &bq->batt_curr);
 	bq->batt_temp = fg_read_temperature(bq);
 	bq->batt_rm = fg_read_rm(bq);
+	bq->batt_chg_current = fg_read_desired_chg_current(bq);
+	bq->batt_chg_voltage = fg_read_desired_chg_voltage(bq);
 
 	mutex_unlock(&bq->data_lock);
-	bq_log("RSOC:%d, Volt:%d, Current:%d, Temperature:%d\n",
-		bq->batt_soc, bq->batt_volt, bq->batt_curr, bq->batt_temp);
+	bq_log("RSOC:%d, Volt:%d, Current:%d, Temperature:%d, Chg current:%d, Chg Voltage:%d\n",
+		bq->batt_soc, bq->batt_volt, bq->batt_curr, bq->batt_temp,
+		bq->batt_chg_current, bq->batt_chg_voltage);
 }
 
 static void fg_monitor_workfunc(struct work_struct *work)
@@ -959,6 +1023,8 @@ static int bq_fg_probe(struct i2c_client *client,
 	bq->batt_temp	= -ENODATA;
 	bq->batt_curr	= -ENODATA;
 	bq->batt_cyclecnt = -ENODATA;
+	bq->batt_chg_current	= -ENODATA;
+	bq->batt_chg_voltage	= -ENODATA;
 
 	bq->fake_soc	= -EINVAL;
 	bq->fake_temp	= -EINVAL;
