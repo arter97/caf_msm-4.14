@@ -143,4 +143,14 @@ config SMB358_CHARGER
 	  The driver reports the charger status via the power supply framework.
 	  A charger status change triggers an IRQ via the device STAT pin.
 
+config SMB235X_CHARGER
+	tristate "SMB235x Battery Charger"
+	depends on MFD_I2C_PMIC
+	help
+	  Say Y to include the support of SMB235x Charger driver.
+	  SMB235x is a battery charger PMIC that can support charging
+	  a 2S battery pack. It also supports Type-C and USB PD as
+	  charger input. This driver registers with the power supply
+	  framework to support battery charging and management functionality.
+
 endmenu
