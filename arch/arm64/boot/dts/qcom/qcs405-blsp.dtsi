@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -114,6 +115,29 @@
 		pinctrl-names = "i2c_active", "i2c_sleep";
 		pinctrl-0 = <&i2c_3_sda_active>, <&i2c_3_scl_active>;
 		pinctrl-1 = <&i2c_3_sleep>;
+		status = "disabled";
+	};
+
+	i2c_3_b: i2c@78b7000 { /* BLSP1 QUP3_B */
+		compatible = "qcom,i2c-msm-v2";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x78b7000  0x600>;
+		reg-names = "qup_phys_addr";
+		interrupt-names = "qup_irq";
+		interrupts = <0 97 0>;
+		dmas = <&dma_blsp1 12 64 0x20000020 0x20>,
+			<&dma_blsp1 13 32 0x20000020 0x20>;
+		dma-names = "tx", "rx";
+		qcom,master-id = <86>;
+		qcom,clk-freq-out = <400000>;
+		qcom,clk-freq-in  = <19200000>;
+		clock-names = "iface_clk", "core_clk";
+		clocks = <&clock_gcc GCC_BLSP1_AHB_CLK>,
+			<&clock_gcc GCC_BLSP1_QUP2_I2C_APPS_CLK>;
+		pinctrl-names = "i2c_active", "i2c_sleep";
+		pinctrl-0 = <&i2c_3_b_sda_active>, <&i2c_3_b_scl_active>;
+		pinctrl-1 = <&i2c_3_b_sleep>;
 		status = "disabled";
 	};
 
