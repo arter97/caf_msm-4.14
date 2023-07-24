@@ -9,6 +9,7 @@
 #include "qcs405.dtsi"
 #include "qcs405-wsa-audio-overlay.dtsi"
 #include "qcs405-circular-pca9956.dtsi"
+#include "qcs405-charger.dtsi"
 
 / {
 	model = "Qualcomm Technologies, Inc. QCS405 Turbox C405 DVT IOT WITH PINE";

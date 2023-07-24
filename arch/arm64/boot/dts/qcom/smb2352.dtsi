@@ -30,4 +30,52 @@ smb2352: qcom,smb2352@71 {
 		compatible = "qcom,qpnp-revid";
 		reg = <0x100>;
 	};
+
+	smb2352_charger: smb2352_charger {
+		compatible = "qcom,smb235x-charger";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		interrupt-parent = <&smb2352>;
+		tcpm-psy-name = "78b7000.i2c:qcom,smb2352@71:typec@1500";
+
+		interrupts = <0x10 0x0 IRQ_TYPE_EDGE_RISING>,
+			<0x10 0x1 IRQ_TYPE_EDGE_RISING>,
+			<0x11 0x0 IRQ_TYPE_EDGE_RISING>,
+			<0x11 0x5 IRQ_TYPE_LEVEL_HIGH>,
+			<0x12 0x0 IRQ_TYPE_EDGE_RISING>,
+			<0x12 0x2 IRQ_TYPE_LEVEL_HIGH>,
+			<0x12 0x3 IRQ_TYPE_LEVEL_HIGH>,
+			<0x12 0x4 IRQ_TYPE_LEVEL_HIGH>,
+			<0x12 0x5 IRQ_TYPE_LEVEL_HIGH>,
+			<0x13 0x0 IRQ_TYPE_LEVEL_HIGH>,
+			<0x13 0x1 IRQ_TYPE_LEVEL_HIGH>,
+			<0x13 0x2 IRQ_TYPE_LEVEL_HIGH>,
+			<0x13 0x3 IRQ_TYPE_LEVEL_HIGH>,
+			<0x13 0x4 IRQ_TYPE_LEVEL_HIGH>,
+			<0x13 0x6 IRQ_TYPE_EDGE_RISING>,
+			<0x13 0x7 IRQ_TYPE_EDGE_RISING>,
+			<0x16 0x1 IRQ_TYPE_EDGE_RISING>,
+			<0x16 0x3 IRQ_TYPE_LEVEL_HIGH>,
+			<0x16 0x6 IRQ_TYPE_EDGE_RISING>;
+
+		interrupt-names = "chgr-error",
+			"chgr-state-change",
+			"otg-fail",
+			"input-current-limit",
+			"batt-temp",
+			"batt-ov",
+			"batt-low",
+			"batt-therm-or-id-missing",
+			"batt-terminal-missing",
+			"usbin-collapse",
+			"usbin-vashdn",
+			"usbin-uv",
+			"usbin-ov",
+			"usbin-plugin",
+			"usbin-src-change",
+			"usbin-icl-change",
+			"aicl-done",
+			"temp-change",
+			"wdog-bark";
+	};
 };
