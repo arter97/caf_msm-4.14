@@ -358,7 +358,7 @@ static int fg_mac_write_block(struct bq_fg_chip *bq, u16 cmd, u8 *data, u8 len)
 }
 #endif
 
-static void fg_read_fw_version(struct bq_fg_chip *bq)
+static int fg_read_fw_version(struct bq_fg_chip *bq)
 {
 
 	int ret;
@@ -368,7 +368,7 @@ static void fg_read_fw_version(struct bq_fg_chip *bq)
 
 	if (ret < 0) {
 		bq_err("Failed to send firmware version subcommand:%d\n", ret);
-		return;
+		return ret;
 	}
 
 	mdelay(2);
@@ -376,12 +376,14 @@ static void fg_read_fw_version(struct bq_fg_chip *bq)
 	ret = fg_mac_read_block(bq, bq->regs[BQ_FG_REG_MBA], buf, 11);
 	if (ret < 0) {
 		bq_err("Failed to read firmware version:%d\n", ret);
-		return;
+		return ret;
 	}
 
 	bq_log("FW Ver:%04X, Build:%04X\n",
 		buf[2] << 8 | buf[3], buf[4] << 8 | buf[5]);
 	bq_log("Ztrack Ver:%04X\n", buf[7] << 8 | buf[8]);
+
+	return 0;
 }
 
 
@@ -1047,6 +1049,12 @@ static int bq_fg_probe(struct i2c_client *client,
 	bq->resume_completed = true;
 	bq->irq_waiting = false;
 
+	ret = fg_read_fw_version(bq);
+	if (ret) {
+		bq_err("Failed to read the fw version, err:%d\n", ret);
+		return ret;
+	}
+
 	if (client->irq) {
 		ret = devm_request_threaded_irq(&client->dev, client->irq, NULL,
 			fg_btp_irq_thread,
@@ -1060,8 +1068,6 @@ static int bq_fg_probe(struct i2c_client *client,
 	}
 
 	device_init_wakeup(bq->dev, 1);
-
-	fg_read_fw_version(bq);
 
 	fg_psy_register(bq);
 
