@@ -146,7 +146,7 @@ struct cnss_driver_event {
 static int m3_dump_major;
 static struct class *m3_dump_class;
 static atomic_t m3_dump_class_refcnt = ATOMIC_INIT(0);
-static DEFINE_SPINLOCK(m3_dump_class_lock);
+static DEFINE_MUTEX(m3_dump_class_lock);
 
 static void cnss_set_plat_priv(struct platform_device *plat_dev,
 			       struct cnss_plat_data *plat_priv)
@@ -2464,12 +2464,12 @@ static int m3_dump_release(struct inode *inode, struct file *file)
 	atomic_dec(&m3_dump_class_refcnt);
 
 	if (atomic_read(&m3_dump_class_refcnt) == 0) {
-		spin_lock(&m3_dump_class_lock);
+		mutex_lock(&m3_dump_class_lock);
 		class_destroy(m3_dump_class);
 		m3_dump_class = NULL;
 		unregister_chrdev(dump_major, "dump");
 		m3_dump_major = 0;
-		spin_unlock(&m3_dump_class_lock);
+		mutex_unlock(&m3_dump_class_lock);
 	}
 
 	complete(&m3_dump_data->read_complete);
@@ -2496,14 +2496,14 @@ static int cnss_do_m3_dump_upload(struct cnss_plat_data *plat_priv,
 	atomic_set(&m3_dump_data->open_timedout, 0);
 	atomic_set(&m3_dump_data->read_timedout, 0);
 
-	spin_lock(&m3_dump_class_lock);
+	mutex_lock(&m3_dump_class_lock);
 	if (!m3_dump_class) {
 		m3_dump_major = register_chrdev(UNNAMED_MAJOR, "dump",
 						&m3_dump_fops);
 		if (m3_dump_major < 0) {
 			cnss_pr_err("%s: Unable to allocate a major number err = %d",
 				    __func__, m3_dump_major);
-			spin_unlock(&m3_dump_class_lock);
+			mutex_unlock(&m3_dump_class_lock);
 			return m3_dump_major;
 		}
 
@@ -2514,12 +2514,12 @@ static int cnss_do_m3_dump_upload(struct cnss_plat_data *plat_priv,
 				    __func__, ret);
 			unregister_chrdev(m3_dump_major, "dump");
 			m3_dump_major = 0;
-			spin_unlock(&m3_dump_class_lock);
+			mutex_unlock(&m3_dump_class_lock);
 			return ret;
 		}
 	}
 	atomic_inc(&m3_dump_class_refcnt);
-	spin_unlock(&m3_dump_class_lock);
+	mutex_unlock(&m3_dump_class_lock);
 
 	dump_dev = device_create(m3_dump_class, NULL,
 				 MKDEV(m3_dump_major,
@@ -2571,12 +2571,12 @@ dump_dev_failed:
 device_failed:
 	atomic_dec(&m3_dump_class_refcnt);
 	if (atomic_read(&m3_dump_class_refcnt) == 0) {
-		spin_lock(&m3_dump_class_lock);
+		mutex_lock(&m3_dump_class_lock);
 		class_destroy(m3_dump_class);
 		m3_dump_class = NULL;
 		unregister_chrdev(m3_dump_major, "dump");
 		m3_dump_major = 0;
-		spin_unlock(&m3_dump_class_lock);
+		mutex_unlock(&m3_dump_class_lock);
 	}
 
 	return ret;
