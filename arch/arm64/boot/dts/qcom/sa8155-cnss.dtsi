@@ -149,6 +149,7 @@
 
 			qcom,wlan-ramdump-dynamic = <0x400000>;
 			mhi,max-channels = <30>;
+			mhi,buffer-len = <0x8000>;
 			mhi,timeout = <10000>;
 
 			mhi_channels {
@@ -259,6 +260,7 @@
 
 			qcom,wlan-ramdump-dynamic = <0x300000>;
 			mhi,max-channels = <30>;
+			mhi,buffer-len = <0x8000>;
 			mhi,timeout = <10000>;
 			mhi,ee = <0x3>, <0x4>;
 			mhi,ee-names = "SBL", "RDDM";

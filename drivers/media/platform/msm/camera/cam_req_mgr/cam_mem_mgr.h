@@ -1,4 +1,5 @@
 /* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -46,6 +47,9 @@ enum cam_smmu_mapping_client {
  * @flags:       attributes of buffer
  * @vaddr:       IOVA of buffer
  * @kmdvaddr:    Kernel virtual address
+ * @krefcount:   Reference counter to track whether the buffer is
+ *               mapped and in use*
+ * @smmu_mapping_client: Client buffer (User or kernel)
  * @active:      state of the buffer
  * @is_imported: Flag indicating if buffer is imported from an FD in user space
  */
@@ -61,8 +65,11 @@ struct cam_mem_buf_queue {
 	uint32_t flags;
 	uint64_t vaddr;
 	uintptr_t kmdvaddr;
+	struct kref krefcount;
+	enum cam_smmu_mapping_client smmu_mapping_client;
 	bool active;
 	bool is_imported;
+
 };
 
 /**
