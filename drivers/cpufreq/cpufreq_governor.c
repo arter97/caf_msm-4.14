@@ -266,7 +266,7 @@ static void dbs_irq_work(struct irq_work *irq_work)
 	struct policy_dbs_info *policy_dbs;
 
 	policy_dbs = container_of(irq_work, struct policy_dbs_info, irq_work);
-	schedule_work_on(smp_processor_id(), &policy_dbs->work);
+	queue_work(system_highpri_wq, &policy_dbs->work);
 }
 
 static void dbs_update_util_handler(struct update_util_data *data, u64 time,
