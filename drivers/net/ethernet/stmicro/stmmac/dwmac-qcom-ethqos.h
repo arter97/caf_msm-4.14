@@ -555,6 +555,8 @@ struct qcom_ethqos {
 
 	/* saving state for Wake-on-LAN */
 	int wolopts;
+	/* state of supported wol options in PHY*/
+	u32 phy_wol_supported;
 	/* Boolean to check if clock is suspended*/
 	int clks_suspended;
 	/* Structure which holds done and wait members */
