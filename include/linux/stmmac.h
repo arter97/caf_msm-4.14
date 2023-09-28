@@ -210,5 +210,7 @@ struct plat_stmmacenet_data {
 	bool mac2mac_en;
 	bool switch_mdio;
 	unsigned int jumbo_mtu;
+	bool clks_suspended;
+	bool is_phy_off;
 };
 #endif
