@@ -320,6 +320,9 @@ static int msm_ssphy_init(struct usb_phy *uphy)
 						SS_PHY_RESET, 0);
 	}
 
+	/* 100us required after clock reset de-asserting */
+	udelay(100);
+
 	writeb_relaxed(SWI_PCS_CLK_SEL, phy->base + SS_PHY_CTRL0);
 
 	msm_usb_write_readback(phy->base, SS_PHY_CTRL4,
