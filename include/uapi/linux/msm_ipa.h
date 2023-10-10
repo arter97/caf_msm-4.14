@@ -131,6 +131,8 @@
 #define IPA_IOCTL_DEL_UC_ACT_ENTRY              83
 #define IPA_IOCTL_QUERY_CACHED_DRIVER_MSG       84
 #define IPA_IOCTL_SET_SW_FLT                    85
+#define IPA_IOCTL_ADD_EoGRE_MAPPING             86
+#define IPA_IOCTL_DEL_EoGRE_MAPPING             87
 
 /**
  * max size of the header to be inserted
@@ -794,7 +796,14 @@ enum ipa_sw_flt_event {
 #define IPA_SW_FLT_EVENT_MAX IPA_SW_FLT_EVENT_MAX
 };
 
-#define IPA_EVENT_MAX_NUM (IPA_SW_FLT_EVENT_MAX)
+enum ipa_eogre_event {
+	IPA_EoGRE_UP_EVENT = IPA_SW_FLT_EVENT_MAX,
+	IPA_EoGRE_DOWN_EVENT,
+	IPA_EoGRE_EVENT_MAX
+#define IPA_EoGRE_EVENT_MAX IPA_EoGRE_EVENT_MAX
+};
+
+#define IPA_EVENT_MAX_NUM (IPA_EoGRE_EVENT_MAX)
 #define IPA_EVENT_MAX ((int)IPA_EVENT_MAX_NUM)
 
 /**
@@ -1156,6 +1165,8 @@ struct ipa_flt_rule {
  * flt rule.
  * @cnt_idx: if 0 means disable, otherwise use for index.
  * will be assigned by ipa driver.
+ * @close_aggr_irq_mod: close aggregation/coalescing and close GSI
+ * interrupt moderation
  */
 struct ipa_flt_rule_v2 {
 	uint8_t retain_hdr;
@@ -1173,6 +1184,7 @@ struct ipa_flt_rule_v2 {
 	uint8_t pdn_idx;
 	uint8_t enable_stats;
 	uint8_t cnt_idx;
+	uint8_t close_aggr_irq_mod;
 };
 
 /**
@@ -1194,17 +1206,19 @@ enum ipa_hdr_l2_type {
 
 /**
  * enum ipa_hdr_l2_type - Processing context type
- * IPA_HDR_PROC_NONE: No processing context
- * IPA_HDR_PROC_ETHII_TO_ETHII: Process Ethernet II to Ethernet II
- * IPA_HDR_PROC_ETHII_TO_802_3: Process Ethernet II to 802_3
- * IPA_HDR_PROC_802_3_TO_ETHII: Process 802_3 to Ethernet II
- * IPA_HDR_PROC_802_3_TO_802_3: Process 802_3 to 802_3
- * IPA_HDR_PROC_ETHII_TO_ETHII_EX: Process Ethernet II to Ethernet II with
- *	generic lengths of src and dst headers
- * IPA_HDR_PROC_L2TP_UDP_HEADER_ADD: Process WLAN To Ethernet packets to
- *	add L2TP UDP header.
+ * IPA_HDR_PROC_NONE:                   No processing context
+ * IPA_HDR_PROC_ETHII_TO_ETHII:         Process Ethernet II to Ethernet II
+ * IPA_HDR_PROC_ETHII_TO_802_3:         Process Ethernet II to 802_3
+ * IPA_HDR_PROC_802_3_TO_ETHII:         Process 802_3 to Ethernet II
+ * IPA_HDR_PROC_802_3_TO_802_3:         Process 802_3 to 802_3
+ * IPA_HDR_PROC_ETHII_TO_ETHII_EX:      Process Ethernet II to Ethernet II with
+ *                                      generic lengths of src and dst headers
+ * IPA_HDR_PROC_L2TP_UDP_HEADER_ADD:    Process WLAN To Ethernet packets to
+ *                                      add L2TP UDP header.
  * IPA_HDR_PROC_L2TP_UDP_HEADER_REMOVE: Process Ethernet To WLAN packets to
- *	remove L2TP UDP header.
+ *                                      remove L2TP UDP header.
+ * IPA_HDR_PROC_EoGRE_HEADER_ADD:       Add IPV[46] GRE header
+ * IPA_HDR_PROC_EoGRE_HEADER_REMOVE:    Remove IPV[46] GRE header
  */
 enum ipa_hdr_proc_type {
 	IPA_HDR_PROC_NONE,
@@ -1218,8 +1232,10 @@ enum ipa_hdr_proc_type {
 	IPA_HDR_PROC_L2TP_UDP_HEADER_ADD,
 	IPA_HDR_PROC_L2TP_UDP_HEADER_REMOVE,
 	IPA_HDR_PROC_SET_DSCP,
+	IPA_HDR_PROC_EoGRE_HEADER_ADD,
+	IPA_HDR_PROC_EoGRE_HEADER_REMOVE,
 };
-#define IPA_HDR_PROC_MAX (IPA_HDR_PROC_SET_DSCP + 1)
+#define IPA_HDR_PROC_MAX (IPA_HDR_PROC_EoGRE_HEADER_REMOVE + 1)
 
 /**
  * struct ipa_rt_rule - attributes of a routing rule
@@ -1376,6 +1392,82 @@ struct ipa_l2tp_hdr_proc_ctx_params {
 	enum ipa_client_type dst_pipe;
 };
 
+/* From 802.1Q tag format (reflects IEEE P802.1p) */
+#define IPA_EoGRE_MAX_PCP_IDX 8
+#define IPA_EoGRE_MAX_VLAN    8 /* Our supported number of VLAN id's */
+
+/* vlan 12 bits + pcp 3 bites <-> dscp 6 bits */
+struct IpaDscpVlanPcpMap_t {
+	/*
+	 * valid only lower 12 bits
+	 */
+	uint16_t vlan[IPA_EoGRE_MAX_VLAN];
+	/*
+	 * dscp[vlan][pcp], valid only lower 6 bits, using pcp as index
+	 */
+	uint8_t dscp[IPA_EoGRE_MAX_VLAN][IPA_EoGRE_MAX_PCP_IDX];
+	uint8_t num_vlan; /* indicate how many vlans valid */
+	uint8_t reserved0;
+	uint16_t reserved1;
+} __packed;
+
+struct ipa_ipgre_info {
+	/* ip address type */
+	enum ipa_ip_type iptype;
+	/* ipv4 */
+	uint32_t ipv4_src;
+	uint32_t ipv4_dst;
+	/* ipv6 */
+	uint32_t ipv6_src[4];
+	uint32_t ipv6_dst[4];
+	/* gre header info */
+	uint16_t gre_protocol;
+};
+
+struct ipa_ioc_eogre_info {
+	/* ip and gre info */
+	struct ipa_ipgre_info ipgre_info;
+	/* mapping info */
+	struct IpaDscpVlanPcpMap_t map_info;
+};
+
+/**
+ * struct ipa_eogre_header_add_procparams -
+ * @eth_hdr_retained:  Specifies if Ethernet header is retained or not
+ * @input_ip_version:  Specifies if Input header is IPV4(0) or IPV6(1)
+ * @output_ip_version:Specifies template header's outer IP V4(0) or V6(1)
+ * @second_pass:       Specifies if the data should be processed again.
+ */
+struct ipa_eogre_header_add_procparams {
+	uint32_t eth_hdr_retained :1;
+	uint32_t input_ip_version :1;
+	uint32_t output_ip_version :1;
+	uint32_t second_pass :1;
+	uint32_t reserved :28;
+};
+
+/**
+ * struct ipa_eogre_header_remove_procparams -
+ * @hdr_len_remove: Specifies how much (in bytes) of the header needs
+ *                  to be removed
+ */
+struct ipa_eogre_header_remove_procparams {
+	uint32_t hdr_len_remove:8; // 44 bytes for IPV6, 24 for IPV4
+	uint32_t reserved:24;
+};
+
+/**
+ * struct ipa_eogre_hdr_proc_ctx_params -
+ * @hdr_add_param: parameters for header add
+ * @hdr_remove_param: parameters for header remove
+ * @is_dst_pipe_valid: if dst pipe is valid
+ * @dst_pipe: destination pipe
+ */
+struct ipa_eogre_hdr_proc_ctx_params {
+	struct ipa_eogre_header_add_procparams hdr_add_param;
+	struct ipa_eogre_header_remove_procparams hdr_remove_param;
+};
+
 /**
  * struct ipa_eth_II_to_eth_II_ex_procparams -
  * @input_ethhdr_negative_offset: Specifies where the ethernet hdr offset is
@@ -1410,6 +1502,7 @@ struct ipa_hdr_proc_ctx_add {
 	uint32_t proc_ctx_hdl;
 	int status;
 	struct ipa_l2tp_hdr_proc_ctx_params l2tp_params;
+	struct ipa_eogre_hdr_proc_ctx_params eogre_params;
 	struct ipa_eth_II_to_eth_II_ex_procparams generic_params;
 };
 
@@ -3287,6 +3380,14 @@ struct ipa_ioc_sw_flt_list_type {
 #define IPA_IOC_SET_SW_FLT _IOWR(IPA_IOC_MAGIC, \
 				IPA_IOCTL_SET_SW_FLT, \
 				struct ipa_ioc_sw_flt_list_type)
+
+#define IPA_IOC_ADD_EoGRE_MAPPING _IOWR(IPA_IOC_MAGIC,	\
+				IPA_IOCTL_ADD_EoGRE_MAPPING, \
+				struct ipa_ioc_eogre_info)
+#define IPA_IOC_DEL_EoGRE_MAPPING _IOWR(IPA_IOC_MAGIC, \
+				IPA_IOCTL_DEL_EoGRE_MAPPING, \
+				struct ipa_ioc_eogre_info)
+
 /*
  * unique magic number of the Tethering bridge ioctls
  */

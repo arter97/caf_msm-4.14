@@ -1163,7 +1163,9 @@ static long ipa3_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct ipa_ioc_nat_dma_cmd *table_dma_cmd;
 	struct ipa_ioc_get_vlan_mode vlan_mode;
 	struct ipa_ioc_wigig_fst_switch fst_switch;
+	struct ipa_ioc_eogre_info eogre_info;
 	struct ipa_nat_in_sram_info nat_in_sram_info;
+	bool send2uC, send2ipacm;
 	union ipa_ioc_uc_activation_entry uc_act;
 	size_t sz;
 	int pre_entry;
@@ -3220,6 +3222,81 @@ static long ipa3_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		}
 		break;
 
+	case IPA_IOC_ADD_EoGRE_MAPPING:
+		IPADBG("Got IPA_IOC_ADD_EoGRE_MAPPING\n");
+		if (copy_from_user(
+				&eogre_info,
+				(const void __user *) arg,
+				sizeof(struct ipa_ioc_eogre_info))) {
+			IPAERR_RL("copy_from_user fails\n");
+			retval = -EFAULT;
+			break;
+		}
+
+		retval = ipa3_check_eogre(&eogre_info, &send2uC, &send2ipacm);
+		if (retval == -EIO) {
+			IPADBG("not to be done but ret pass to caller");
+			retval = 0;
+			break;
+		}
+
+		ipa3_ctx->eogre_enabled = (retval == 0);
+
+		if (retval == 0 && send2uC == true) {
+			/*
+			 * Send map to uC...
+			 */
+			retval = ipa3_add_dscp_vlan_pcp_map(
+				&eogre_info.map_info);
+		}
+
+		if (retval == 0 && send2ipacm == true) {
+			/*
+			 * Send ip addrs to ipacm...
+			 */
+			retval = ipa3_send_eogre_info(IPA_EoGRE_UP_EVENT,
+					&eogre_info);
+		}
+
+		if (retval != 0)
+			ipa3_ctx->eogre_enabled = false;
+
+
+		break;
+
+	case IPA_IOC_DEL_EoGRE_MAPPING:
+		IPADBG("Got IPA_IOC_DEL_EoGRE_MAPPING\n");
+
+		memset(&eogre_info, 0, sizeof(eogre_info));
+
+		retval = ipa3_check_eogre(&eogre_info, &send2uC, &send2ipacm);
+		if (retval == -EIO) {
+			IPADBG("nothing to do but return pass to caller");
+			retval = 0;
+			break;
+		}
+
+		if (retval == 0 && send2uC == true) {
+			/*
+			 * Send map clear to uC...
+			 */
+			retval = ipa3_add_dscp_vlan_pcp_map(
+				&eogre_info.map_info);
+		}
+
+		if (retval == 0 && send2ipacm == true) {
+			/*
+			 * Send null ip addrs to ipacm...
+			 */
+			retval = ipa3_send_eogre_info(IPA_EoGRE_DOWN_EVENT,
+					&eogre_info);
+		}
+
+		if (retval == 0)
+			ipa3_ctx->eogre_enabled = false;
+
+		break;
+
 	case IPA_IOC_SET_MAC_FLT:
 		IPADBG("Got IPA_IOC_SET_MAC_FLT\n");
 		if (ipa3_send_mac_flt_list(arg)) {
@@ -5207,6 +5284,12 @@ long compat_ipa3_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 	case IPA_IOC_APP_CLOCK_VOTE32:
 		cmd = IPA_IOC_APP_CLOCK_VOTE;
+		break;
+	case IPA_IOC_ADD_EoGRE_MAPPING32:
+		cmd = IPA_IOC_ADD_EoGRE_MAPPING;
+		break;
+	case IPA_IOC_DEL_EoGRE_MAPPING32:
+		cmd = IPA_IOC_DEL_EoGRE_MAPPING;
 		break;
 	case IPA_IOC_COMMIT_HDR:
 	case IPA_IOC_RESET_HDR:

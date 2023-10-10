@@ -45,6 +45,7 @@
  * IPA_CPU_2_HW_CMD_RESET_PIPE : Command to reset a pipe - SW WA for a HW bug.
  * IPA_CPU_2_HW_CMD_GSI_CH_EMPTY : Command to check for GSI channel emptiness.
  * IPA_CPU_2_HW_CMD_REMOTE_IPA_INFO: Command to store remote IPA Info
+IPA_CPU_2_HW_CMD_ADD_EOGRE_MAPPING: Command to create/update GRE mapping
  */
 enum ipa3_cpu_2_hw_commands {
 	IPA_CPU_2_HW_CMD_NO_OP                     =
@@ -71,6 +72,8 @@ enum ipa3_cpu_2_hw_commands {
 		FEATURE_ENUM_VAL(IPA_HW_FEATURE_COMMON, 10),
 	IPA_CPU_2_HW_CMD_REMOTE_IPA_INFO           =
 		FEATURE_ENUM_VAL(IPA_HW_FEATURE_COMMON, 11),
+IPA_CPU_2_HW_CMD_ADD_EOGRE_MAPPING             =
+		FEATURE_ENUM_VAL(IPA_HW_FEATURE_COMMON, 21),
 };
 
 /**
@@ -775,8 +778,8 @@ send_cmd:
 			goto send_cmd;
 		}
 
-		IPAERR("Recevied status %u, Expected status %u\n",
-			ipa3_ctx->uc_ctx.uc_status, expected_status);
+		IPAERR("uC cmd(%u): Recevied status %u, Expected status %u\n",
+			opcode, ipa3_ctx->uc_ctx.uc_status, expected_status);
 		mutex_unlock(&ipa3_ctx->uc_ctx.uc_lock);
 		return -EFAULT;
 	}
@@ -1162,3 +1165,60 @@ cleanup:
 	IPADBG("exit\n");
 	return result;
 }
+/**
+ * ipa3_add_dscp_vlan_pcp_map() - Feed "vlan/pcp to dscp" map into the IPA uC
+ * @map: The mapping data destined for the uC
+ *
+ * Returns: 0 on success, negative on failure
+ */
+int ipa3_add_dscp_vlan_pcp_map(
+	struct IpaDscpVlanPcpMap_t *map)
+{
+	struct ipa_mem_buffer       mem;
+	struct IpaDscpVlanPcpMap_t *cmd;
+	int res;
+
+	if (!map) {
+		IPAERR("null argument (ie. map) passed\n");
+		return -EINVAL;
+	}
+
+	mem.size = sizeof(struct IpaDscpVlanPcpMap_t);
+
+	mem.base = dma_alloc_coherent(
+		ipa3_ctx->uc_pdev, mem.size,
+		&mem.phys_base, GFP_KERNEL);
+
+	if (!mem.base) {
+		IPAERR("Fail to alloc DMA buff of size %d\n", mem.size);
+		return -ENOMEM;
+	}
+
+	cmd = (struct IpaDscpVlanPcpMap_t *) mem.base;
+
+	memcpy(cmd, map, sizeof(struct IpaDscpVlanPcpMap_t));
+
+	IPA_ACTIVE_CLIENTS_INC_SIMPLE();
+
+	res = ipa3_uc_send_cmd(
+		(u32) mem.phys_base,
+		IPA_CPU_2_HW_CMD_ADD_EOGRE_MAPPING,
+		0, true, 10 * HZ);
+
+	if (res) {
+		IPAERR("ipa3_uc_send_cmd failed %d\n", res);
+		goto free_coherent;
+	}
+
+	IPADBG("map add success\n");
+
+	res = 0;
+
+free_coherent:
+	dma_free_coherent(ipa3_ctx->uc_pdev, mem.size, mem.base, mem.phys_base);
+
+	IPA_ACTIVE_CLIENTS_DEC_SIMPLE();
+
+	return res;
+}
+
