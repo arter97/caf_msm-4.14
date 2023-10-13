@@ -64,6 +64,8 @@ int cnss_bus_call_driver_modem_status(struct cnss_plat_data *plat_priv,
 				      int modem_current_status);
 int cnss_bus_update_status(struct cnss_plat_data *plat_priv,
 			   enum cnss_driver_status status);
+int cnss_bus_update_uevent(struct cnss_plat_data *plat_priv,
+			  enum cnss_driver_status status, void *data);
 bool cnss_bus_req_mem_ind_valid(struct cnss_plat_data *plat_priv);
 int cnss_get_msi_assignment(struct cnss_plat_data *plat_priv,
 			    char *msi_name,

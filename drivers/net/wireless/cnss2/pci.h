@@ -175,5 +175,7 @@ int cnss_pci_get_iova(struct cnss_pci_data *pci_priv, u64 *addr, u64 *size);
 int cnss_pci_get_iova_ipa(struct cnss_pci_data *pci_priv, u64 *addr,
 			  u64 *size);
 bool cnss_pci_is_smmu_s1_enabled(struct cnss_pci_data *pci_priv);
+int cnss_pci_call_driver_uevent(struct cnss_pci_data *pci_priv,
+				enum cnss_driver_status status, void *data);
 
 #endif /* _CNSS_PCI_H */
