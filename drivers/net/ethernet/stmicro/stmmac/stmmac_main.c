@@ -5353,6 +5353,7 @@ int stmmac_resume(struct device *dev)
 	priv->mss = 0;
 
 	stmmac_clear_descriptors(priv);
+	init_dma_tx_desc_rings(ndev);
 
 	if (!device_can_wakeup(dev) && priv->plat->rgmii_loopback_cfg)
 		priv->plat->rgmii_loopback_cfg(priv, 1);
