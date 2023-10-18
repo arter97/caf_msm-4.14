@@ -94,6 +94,7 @@ struct cnss_hang_event {
 
 enum cnss_bus_event_type {
 	BUS_EVENT_PCI_LINK_DOWN = 0,
+	BUS_EVENT_PCI_LINK_RESUME_FAIL = 1,
 
 	BUS_EVENT_INVALID = 0xFFFF,
 };

@@ -1119,6 +1119,7 @@ static int cnss_do_recovery(struct cnss_plat_data *plat_priv,
 {
 	struct cnss_subsys_info *subsys_info =
 		&plat_priv->subsys_info;
+	int ret;
 
 	plat_priv->recovery_count++;
 
@@ -1158,7 +1159,9 @@ static int cnss_do_recovery(struct cnss_plat_data *plat_priv,
 
 self_recovery:
 	cnss_bus_dev_shutdown(plat_priv);
-	cnss_bus_dev_powerup(plat_priv);
+	ret = cnss_bus_dev_powerup(plat_priv);
+	if (ret)
+		clear_bit(CNSS_DRIVER_RECOVERY, &plat_priv->driver_state);
 
 	return 0;
 }
