@@ -83,6 +83,12 @@ enum cnss_driver_status {
 	CNSS_LOAD_UNLOAD,
 	CNSS_RECOVERY,
 	CNSS_FW_DOWN,
+	CNSS_HANG_EVENT,
+};
+
+struct cnss_hang_event {
+	void *hang_event_data;
+	u16 hang_event_data_len;
 };
 
 struct cnss_uevent_data {
