@@ -83,10 +83,18 @@ int ieee80211_channel_to_frequency(int chan, enum nl80211_band band)
 			return 2407 + chan * 5;
 		else if (chan  >= 221 && chan <= 224)
 			return 2477 + (chan - 221) * 5;
-		else if (chan > 200)
+		else if (chan > 200  && chan <= 224)
 			return 2399 + (chan - 200) * 5;
+		else if ((chan > 190 && chan < 200) || chan > 224) {
+			if ((chan % 2) == 0)
+				return 2399 + (chan - 190) * 5 / 2;
+			else
+				return 2399 + (chan - 190) * 5 / 2 + 1;
+		}
 		break;
 	case NL80211_BAND_5GHZ:
+		if ((chan > 1 && chan < 31) || (chan >= 182 && chan <= 184))
+			return 5000 + chan * 5;
 		if (chan >= 182 && chan <= 196)
 			return 4000 + chan * 5;
 		else
@@ -108,7 +116,9 @@ int ieee80211_frequency_to_channel(int freq)
 	/* see 802.11 17.3.8.3.2 and Annex J */
 	if (freq == 2484)
 		return 14;
-	else if (freq < 2484)
+	else if (freq < 2412 || (freq > 2492 && freq <= 2499))
+		return (190 + (((freq - 2399) * 2) / 5));
+	else if (freq < 2484 && freq >= 2412)
 		return (freq - 2407) / 5;
 	else if (freq >= 4910 && freq <= 4980)
 		return (freq - 4000) / 5;
