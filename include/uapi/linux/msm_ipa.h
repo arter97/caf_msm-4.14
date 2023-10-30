@@ -2943,6 +2943,7 @@ struct ipa_ioc_pdn_config {
 
 		struct ipa_pdn_ip_collision_cfg {
 			uint32_t pdn_ip_addr;
+			uint16_t vlan_id;
 		} collison_cfg;
 
 		struct ipa_pdn_ip_passthrough_cfg {
