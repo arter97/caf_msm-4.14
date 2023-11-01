@@ -1306,11 +1306,15 @@ static u32 msm_spi_calc_spi_ioc_clk_polarity(u32 spi_ioc, u8 mode)
 }
 
 /**
- * msm_spi_set_spi_io_control: prepares register SPI_IO_CONTROL to process the
- * next transfer
+ * msm_spi_set_spi_io_control() - prepares register SPI_IO_CONTROL
+ * to process the next transfer
+ * @dd - pointer handle to SPI driver structure
+ * @spi_master - pointer handle to SPI master structure
+ *
  * @return the new set value of SPI_IO_CONTROL
  */
-static u32 msm_spi_set_spi_io_control(struct msm_spi *dd)
+static u32 msm_spi_set_spi_io_control(struct msm_spi *dd,
+				      struct spi_master *spi_master)
 {
 	u32 spi_ioc, spi_ioc_orig, chip_select;
 
@@ -1322,8 +1326,16 @@ static u32 msm_spi_set_spi_io_control(struct msm_spi *dd)
 	chip_select = dd->spi->chip_select << 2;
 	if ((spi_ioc & SPI_IO_C_CS_SELECT) != chip_select)
 		spi_ioc = (spi_ioc & ~SPI_IO_C_CS_SELECT) | chip_select;
-	if (!dd->cur_transfer->cs_change)
-		spi_ioc |= SPI_IO_C_MX_CS_MODE;
+	if (!dd->cur_transfer->cs_change) {
+		/*
+		 * Setting this SPI_IO_C_MX_CS_MODE bit for all transfer
+		 * except last transfer because CS will be de-asserted
+		 * immediately after last transfer by hw.
+		 */
+		if (!list_is_last(&dd->cur_transfer->transfer_list,
+				  &spi_master->cur_msg->transfers))
+			spi_ioc |= SPI_IO_C_MX_CS_MODE;
+	}
 
 	if (spi_ioc != spi_ioc_orig)
 		writel_relaxed(spi_ioc, dd->base + SPI_IO_CONTROL);
@@ -1366,7 +1378,15 @@ static void get_transfer_length(struct msm_spi *dd)
 	dd->cur_msg_len = xfer->len;
 }
 
-static int msm_spi_process_transfer(struct msm_spi *dd)
+/**
+ * msm_spi_process_transfer() - process the data transfer
+ * @dd - pointer handle to SPI driver structure
+ * @spi_master - pointer handle to SPI master structure
+ *
+ * @return - 0 for success otherwise failure error code
+ */
+static int msm_spi_process_transfer(struct msm_spi *dd,
+				    struct spi_master *spi_master)
 {
 	u8  bpw;
 	u32 max_speed;
@@ -1438,7 +1458,7 @@ static int msm_spi_process_transfer(struct msm_spi *dd)
 	msm_spi_set_qup_io_modes(dd);
 	msm_spi_set_spi_config(dd, bpw);
 	msm_spi_set_qup_config(dd, bpw);
-	spi_ioc = msm_spi_set_spi_io_control(dd);
+	spi_ioc = msm_spi_set_spi_io_control(dd, spi_master);
 	msm_spi_set_qup_op_mask(dd);
 
 	/* The output fifo interrupt handler will handle all writes after
@@ -1504,7 +1524,7 @@ transfer_end:
 	dd->rx_mode = SPI_MODE_NONE;
 
 	msm_spi_set_state(dd, SPI_OP_STATE_RESET);
-	if (!dd->cur_transfer->cs_change)
+	if (!dd->cur_transfer->cs_change && !dd->hw_ctrl_cs)
 		writel_relaxed(spi_ioc & ~SPI_IO_C_MX_CS_MODE,
 		       dd->base + SPI_IO_CONTROL);
 	return status;
@@ -1704,7 +1724,7 @@ static int msm_spi_transfer_one(struct spi_master *master,
 
 	if (!status_error)
 		status_error =
-			msm_spi_process_transfer(dd);
+			msm_spi_process_transfer(dd, master);
 
 	spin_lock_irqsave(&dd->queue_lock, flags);
 	dd->transfer_pending = 0;
@@ -2540,6 +2560,7 @@ static int msm_spi_probe(struct platform_device *pdev)
 	int			i = 0;
 	int                     rc = -ENXIO;
 	struct msm_spi_platform_data *pdata;
+	bool hw_ctrl_cs;
 
 	master = spi_alloc_master(&pdev->dev, sizeof(struct msm_spi));
 	if (!master) {
@@ -2548,10 +2569,13 @@ static int msm_spi_probe(struct platform_device *pdev)
 		goto err_probe_exit;
 	}
 
+	hw_ctrl_cs = of_property_read_bool(pdev->dev.of_node, "hw-ctrl-cs");
+
 	master->bus_num        = pdev->id;
 	master->mode_bits      = SPI_SUPPORTED_MODES;
 	master->num_chipselect = SPI_NUM_CHIPSELECTS;
-	master->set_cs	       = msm_spi_set_cs;
+	if (!hw_ctrl_cs)
+		master->set_cs = msm_spi_set_cs;
 	master->setup          = msm_spi_setup;
 	master->prepare_transfer_hardware = msm_spi_prepare_transfer_hardware;
 	master->transfer_one = msm_spi_transfer_one;
@@ -2560,6 +2584,8 @@ static int msm_spi_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, master);
 	dd = spi_master_get_devdata(master);
+
+	dd->hw_ctrl_cs = hw_ctrl_cs;
 
 	if (pdev->dev.of_node) {
 		dd->qup_ver = SPI_QUP_VERSION_BFAM;
