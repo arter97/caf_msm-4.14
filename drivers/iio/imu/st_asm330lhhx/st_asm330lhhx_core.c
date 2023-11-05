@@ -1555,13 +1555,14 @@ st_asm330lhhx_selftest_sensor(struct st_asm330lhhx_sensor *sensor,
 	int x = 0, y = 0, z = 0, try_count = 0;
 	u8 i, status, n = 0;
 	u8 reg, bitmask;
-	int ret, delay;
+	int ret, delay, data_delay = 100000;
 	u8 raw_data[6];
 
 	switch (sensor->id) {
 	case ST_ASM330LHHX_ID_ACC:
 		reg = ST_ASM330LHHX_REG_OUTX_L_A_ADDR;
 		bitmask = ST_ASM330LHHX_REG_STATUS_XLDA;
+		data_delay = 50000;
 		break;
 	case ST_ASM330LHHX_ID_GYRO:
 		reg = ST_ASM330LHHX_REG_OUTX_L_G_ADDR;
@@ -1570,6 +1571,9 @@ st_asm330lhhx_selftest_sensor(struct st_asm330lhhx_sensor *sensor,
 	default:
 		return -EINVAL;
 	}
+
+	/* reset selftest_status */
+	sensor->selftest_status = -1;
 
 	/* set selftest normal mode */
 	ret = st_asm330lhhx_set_selftest(sensor, 0);
@@ -1586,8 +1590,29 @@ st_asm330lhhx_selftest_sensor(struct st_asm330lhhx_sensor *sensor,
 	 */
 	delay = 1000000 / sensor->odr;
 
-	/* power up, wait 100 ms for stable output */
-	msleep(100);
+	/* power up, wait for stable output */
+	usleep_range(data_delay, data_delay + data_delay / 100);
+
+	/* after enabled the sensor trash first sample */
+	while (try_count < 3) {
+		usleep_range(delay, delay + delay/10);
+		ret = st_asm330lhhx_read_locked(sensor->hw,
+						 ST_ASM330LHHX_REG_STATUS_ADDR,
+						 &status, sizeof(status));
+		if (ret < 0)
+			goto selftest_failure;
+
+		if (status & bitmask) {
+			st_asm330lhhx_read_locked(sensor->hw, reg,
+						   raw_data, sizeof(raw_data));
+			break;
+		}
+
+		try_count++;
+	}
+
+	if (try_count == 3)
+		goto selftest_failure;
 
 	/*
 	 * for 5 times, after checking status bit, read the output
@@ -1639,8 +1664,31 @@ st_asm330lhhx_selftest_sensor(struct st_asm330lhhx_sensor *sensor,
 	/* set selftest mode */
 	st_asm330lhhx_set_selftest(sensor, test);
 
-	/* wait 100 ms for stable output */
-	msleep(100);
+	/* wait for stable output */
+	usleep_range(data_delay, data_delay + data_delay / 100);
+
+	try_count = 0;
+
+	/* after enabled the sensor trash first sample */
+	while (try_count < 3) {
+		usleep_range(delay, delay + delay/10);
+		ret = st_asm330lhhx_read_locked(sensor->hw,
+						 ST_ASM330LHHX_REG_STATUS_ADDR,
+						 &status, sizeof(status));
+		if (ret < 0)
+			goto selftest_failure;
+
+		if (status & bitmask) {
+			st_asm330lhhx_read_locked(sensor->hw, reg,
+						   raw_data, sizeof(raw_data));
+			break;
+		}
+
+		try_count++;
+	}
+
+	if (try_count == 3)
+		goto selftest_failure;
 
 	/*
 	 * for 5 times, after checking status bit,
@@ -1686,18 +1734,24 @@ st_asm330lhhx_selftest_sensor(struct st_asm330lhhx_sensor *sensor,
 	if ((abs(x_selftest - x) < sensor->min_st) ||
 	    (abs(x_selftest - x) > sensor->max_st)) {
 		sensor->selftest_status = -1;
+		dev_info(sensor->hw->dev, "st: failure on x: non-st(%d), st(%d)\n",
+			 x, x_selftest);
 		goto selftest_failure;
 	}
 
 	if ((abs(y_selftest - y) < sensor->min_st) ||
 	    (abs(y_selftest - y) > sensor->max_st)) {
 		sensor->selftest_status = -1;
+		dev_info(sensor->hw->dev, "st: failure on y: non-st(%d), st(%d)\n",
+			 y, y_selftest);
 		goto selftest_failure;
 	}
 
 	if ((abs(z_selftest - z) < sensor->min_st) ||
 	    (abs(z_selftest - z) > sensor->max_st)) {
 		sensor->selftest_status = -1;
+		dev_info(sensor->hw->dev, "st: failure on z: non-st(%d), st(%d)\n",
+			 z, z_selftest);
 		goto selftest_failure;
 	}
 
@@ -1726,11 +1780,9 @@ static ssize_t st_asm330lhhx_sysfs_start_selftest(struct device *dev,
 	    id != ST_ASM330LHHX_ID_GYRO)
 		return -EINVAL;
 
-	for (test = 0; test < ARRAY_SIZE(st_asm330lhhx_selftest_table);
-			test++) {
+	for (test = 0; test < ARRAY_SIZE(st_asm330lhhx_selftest_table); test++) {
 		if (strncmp(buf, st_asm330lhhx_selftest_table[test].string_mode,
-			    strlen(st_asm330lhhx_selftest_table[
-				    test].string_mode)) == 0)
+			strlen(st_asm330lhhx_selftest_table[test].string_mode)) == 0)
 			break;
 	}
 
@@ -1783,6 +1835,10 @@ static ssize_t st_asm330lhhx_sysfs_start_selftest(struct device *dev,
 		/* set BDU = 1, ODR = 208 Hz, FS = 2000 dps */
 		st_asm330lhhx_set_full_scale(sensor,
 					     IIO_DEGREE_TO_RAD(70000));
+
+		/* before enable gyro add 150 ms delay when gyro self-test */
+		usleep_range(150000, 151000);
+
 		st_asm330lhhx_set_odr(sensor, 208, 0);
 		sensor->odr = 208;
 		sensor->uodr = 0;
