@@ -1422,6 +1422,10 @@ struct ipa_ipgre_info {
 	uint32_t ipv6_dst[4];
 	/* gre header info */
 	uint16_t gre_protocol;
+	/* If v6 tunnel: option header enabled then set "true"
+	 * If v4 tunnel: option header enabled then set "false"
+	 */
+	uint8_t ipv6_option_hdr_enabled;
 };
 
 struct ipa_ioc_eogre_info {
