@@ -195,11 +195,6 @@ static int dload_set(const char *val, const struct kernel_param *kp)
 
 	int old_val = download_mode;
 
-	if (!download_mode) {
-		pr_err("Error: SDI dynamic enablement is not supported\n");
-		return -EINVAL;
-	}
-
 	ret = param_set_int(val, kp);
 
 	if (ret)
