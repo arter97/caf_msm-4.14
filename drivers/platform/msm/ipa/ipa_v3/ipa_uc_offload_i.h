@@ -51,7 +51,7 @@
 #define FEATURE_ENUM_VAL(feature, opcode) ((feature << 5) | opcode)
 #define EXTRACT_UC_FEATURE(value) (value >> 5)
 
-#define IPA_HW_NUM_FEATURES 0x8
+#define IPA_HW_NUM_FEATURES 0xC
 
 /**
  * enum ipa3_hw_features - Values that represent the features supported
@@ -73,6 +73,8 @@ enum ipa3_hw_features {
 	IPA_HW_FEATURE_ZIP		=	0x4,
 	IPA_HW_FEATURE_NTN		=	0x5,
 	IPA_HW_FEATURE_OFFLOAD		=	0x6,
+	IPA_HW_FEATURE_UNIT		=	0x7,
+	IPA_HW_FEATURE_EOGRE		=	0xB,
 	IPA_HW_FEATURE_MAX		=	IPA_HW_NUM_FEATURES
 };
 
