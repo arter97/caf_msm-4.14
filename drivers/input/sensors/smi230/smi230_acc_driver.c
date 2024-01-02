@@ -50,8 +50,12 @@
 #include <linux/workqueue.h>
 #include <linux/firmware.h>
 #include <linux/gpio.h>
+#include <linux/input.h>
+#include <linux/interrupt.h>
 #include <linux/of_gpio.h>
 #include <linux/of_irq.h>
+#include <linux/time64.h>
+#include <linux/timekeeping.h>
 
 #include "smi230_driver.h"
 #include "smi230_data_sync.h"
@@ -1101,12 +1105,41 @@ static void smi230_new_data_ready_handle(
 }
 #endif
 
+static int smi230_acc_toggle_int_pin(uint8_t enable)
+ {
+	int err;
+	uint8_t reg_addr, data;
+
+	if (IS_ENABLED(CONFIG_SMI230_ACC_INT1))
+		reg_addr = SMI230_ACCEL_INT1_IO_CONF_REG;
+	else if (IS_ENABLED(CONFIG_SMI230_ACC_INT2))
+		reg_addr = SMI230_ACCEL_INT2_IO_CONF_REG;
+
+	err = smi230_acc_get_regs(reg_addr, &data, 1, p_smi230_dev);
+	if (err != SMI230_OK) {
+		PERR("Error reading INT_IO_CONF_REG");
+		return err;
+	}
+
+	data = SMI230_SET_BITS(data, SMI230_ACCEL_INT_IO, enable);
+
+	err = smi230_acc_set_regs(reg_addr, &data, 1, p_smi230_dev);
+	if (err != SMI230_OK)
+		PERR("Error writing INT_IO_CONF_REG");
+
+	return err;
+}
+
 static irqreturn_t smi230_irq_work_func(int irq, void *handle)
 {
 	struct smi230_client_data *client_data = handle;
+	int err = 0;
 
 	/* int status reg is not available to tell the interupt source */
 	mutex_lock(&client_data->acc_temp_read);
+	err = smi230_acc_toggle_int_pin(0);
+        if (err != SMI230_OK)
+                PERR("deactivate int pin error");
 #ifdef CONFIG_SMI230_RAW_DATA
 	smi230_raw_data_ready_handle(client_data);
 #endif
@@ -1119,6 +1152,9 @@ static irqreturn_t smi230_irq_work_func(int irq, void *handle)
 #ifdef CONFIG_SMI230_DATA_SYNC
 	smi230_data_sync_ready_handle(client_data);
 #endif
+	err = smi230_acc_toggle_int_pin(1);
+ 	if (err != SMI230_OK)
+ 		PERR("activate int pin error");
 	mutex_unlock(&client_data->acc_temp_read);
 	return IRQ_HANDLED;
 }
