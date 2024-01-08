@@ -109,11 +109,14 @@ struct uhab_context *hab_ctx_alloc(int kernel)
 	return ctx;
 }
 
-/* ctx can only be freed when all the vchan releases the refcnt */
-void hab_ctx_free(struct kref *ref)
+/*
+ * This function might sleep. One scenario (only applicable for Linux)
+ * is as below, hab_ctx_free_fn->habmem_remove_export->habmem_export_put
+ * ->habmem_export_destroy->habmem_exp_release,
+ * where dma_buf_unmap_attachment() & dma_buf_detach() might sleep.
+ */
+void hab_ctx_free_fn(struct uhab_context *ctx)
 {
-	struct uhab_context *ctx =
-		container_of(ref, struct uhab_context, refcount);
 	struct hab_export_ack_recvd *ack_recvd, *tmp;
 	struct virtual_channel *vchan;
 	struct physical_channel *pchan;
@@ -212,6 +215,11 @@ void hab_ctx_free(struct kref *ref)
 		spin_unlock_bh(&habdev->pchan_lock);
 	}
 	kfree(ctx);
+}
+
+void hab_ctx_free(struct kref *ref)
+{
+	hab_ctx_free_os(ref);
 }
 
 /*

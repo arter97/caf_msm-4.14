@@ -258,6 +258,7 @@ struct hab_device {
 struct uhab_context {
 	struct list_head node; /* managed by the driver */
 	struct kref refcount;
+	struct work_struct destroy_work;
 
 	struct list_head vchannels;
 	int vcnt;
@@ -507,6 +508,9 @@ void hab_pchan_put(struct physical_channel *pchan);
 struct uhab_context *hab_ctx_alloc(int kernel);
 
 void hab_ctx_free(struct kref *ref);
+
+void hab_ctx_free_fn(struct uhab_context *ctx);
+void hab_ctx_free_os(struct kref *ref);
 
 static inline void hab_ctx_get(struct uhab_context *ctx)
 {
