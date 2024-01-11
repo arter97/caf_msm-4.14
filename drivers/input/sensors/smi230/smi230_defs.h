@@ -592,8 +592,8 @@
 #define SMI230_ACC_FIFO_MODE                   UINT8_C(0x01)
 
 #define SMI230_FIFO_GYRO_FRAME_LENGTH          UINT8_C(6)
-#define SMI230_GYRO_STREAM_MODE                UINT8_C(0x80)
-#define SMI230_GYRO_FIFO_MODE                  UINT8_C(0x40)
+#define SMI230_GYRO_STREAM_MODE                UINT8_C(0x8C)
+#define SMI230_GYRO_FIFO_MODE                  UINT8_C(0x4C)
 /*name Mask definitions for FIFO configuration modes */
 #define SMI230_ACC_FIFO_MODE_CONFIG_MASK       UINT8_C(0x01)
 
@@ -746,6 +746,9 @@ struct smi230_cfg
 
     /*! output data rate */
     uint8_t odr;
+
+	/*! fifo watermark level */
+	uint8_t fifo_wm;
 };
 
 /*!
