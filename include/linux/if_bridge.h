@@ -58,6 +58,9 @@ typedef int br_should_route_hook_t(struct sk_buff *skb);
 extern br_should_route_hook_t __rcu *br_should_route_hook;
 extern struct net_device *br_port_dev_get(struct net_device *dev,
 						unsigned char *addr);
+extern bool br_is_hairpin_enabled(struct net_device *dev);
+extern void br_add_or_refresh_fdb_entry_by_netdev(struct net_device *dev,
+						const char *addr);
 
 #if IS_ENABLED(CONFIG_BRIDGE) && IS_ENABLED(CONFIG_BRIDGE_IGMP_SNOOPING)
 int br_multicast_list_adjacent(struct net_device *dev,
