@@ -193,8 +193,12 @@ void ethqos_reset_phy_enable_interrupt(struct qcom_ethqos *ethqos)
 		ETHQOSERR("do mdio reset\n");
 		stmmac_mdio_reset(priv->mii);
 	}
+	if (!phydev) {
+		ETHQOSERR("phydev is null , intr value=%d\n", phy_intr_en);
+		return;
+	}
 	/*Enable phy interrupt*/
-	if (phy_intr_en && phydev) {
+	if (phy_intr_en) {
 		ETHQOSDBG("PHY interrupt Mode enabled\n");
 		phydev->irq = PHY_IGNORE_INTERRUPT;
 		phydev->interrupts =  PHY_INTERRUPT_ENABLED;
@@ -207,8 +211,6 @@ void ethqos_reset_phy_enable_interrupt(struct qcom_ethqos *ethqos)
 	} else if (!phy_intr_en) {
 		phydev->irq = PHY_POLL;
 		ETHQOSDBG("PHY Polling Mode enabled\n");
-	} else {
-		ETHQOSERR("phydev is null , intr value=%d\n", phy_intr_en);
 	}
 }
 
