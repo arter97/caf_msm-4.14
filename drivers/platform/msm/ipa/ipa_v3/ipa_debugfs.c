@@ -1517,8 +1517,8 @@ static ssize_t ipa3_read_eogre_stats(struct file *file, char __user *ubuf,
 	if (!ipa3_get_eogre_stats(&stats)) {
 
 		nbytes = scnprintf(dbg_buff, IPA_MAX_MSG_LEN,
-			"EoGRE UL Stats is %d\n"
-			"EoGRE DL stats is %d\n",
+			"EoGRE UL Stats is %u\n"
+			"EoGRE DL stats is %u\n",
 			stats.eogre_header_add_id,
 			stats.eogre_header_remove_id);
 		cnt += nbytes;
