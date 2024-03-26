@@ -430,7 +430,7 @@ static void eth_tx_data(struct kthread_work *work)
 		QRTR_DBG(qdev->dev, "%s: Sending %d\n", __func__,
 			 pkt->skb->len);
 		rc = qdev->cb_info->eth_send(pkt->skb);
-		if (rc)
+		if (rc < 0)
 			dev_err(qdev->dev, "%s: eth_send failed: %d\n",
 				__func__, rc);
 
