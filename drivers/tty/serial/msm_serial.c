@@ -1882,7 +1882,7 @@ static int msm_serial_resume(struct device *dev)
 #endif /* CONFIG_PM_SLEEP */
 
 static const struct dev_pm_ops msm_serial_dev_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(msm_serial_suspend, msm_serial_resume)
+	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(msm_serial_suspend, msm_serial_resume)
 };
 
 static struct platform_driver msm_platform_driver = {
