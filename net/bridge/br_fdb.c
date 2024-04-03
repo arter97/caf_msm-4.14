@@ -1147,3 +1147,113 @@ void br_fdb_offloaded_set(struct net_bridge *br, struct net_bridge_port *p,
 
 	spin_unlock_bh(&br->hash_lock);
 }
+
+static void fdb_add_hw_addr_by_user(struct net_bridge *br,
+				    const unsigned char *addr)
+{
+	int err;
+	struct net_bridge_port *p;
+
+	list_for_each_entry(p, &br->port_list, list) {
+		if (!br_promisc_port(p)) {
+			err = dev_uc_add(p->dev, addr);
+			if (err)
+				goto undo;
+		}
+	}
+
+	return;
+undo:
+	list_for_each_entry_continue_reverse(p, &br->port_list, list) {
+		if (!br_promisc_port(p))
+			dev_uc_del(p->dev, addr);
+	}
+}
+
+
+void br_fdb_update_by_user(struct net_bridge *br,
+			   struct net_bridge_port *source,
+			   const unsigned char *addr, u16 vid,
+			   bool added_by_user)
+{
+	struct hlist_head *head = &br->hash[br_mac_hash(addr, vid)];
+	struct net_bridge_fdb_entry *fdb;
+	bool fdb_modified = false;
+
+	/* some users want to always flood. */
+	if (hold_time(br) == 0)
+		return;
+
+	/* ignore packets unless we are using this port */
+	if (!(source->state == BR_STATE_LEARNING ||
+	      source->state == BR_STATE_FORWARDING))
+		return;
+
+	fdb = fdb_find_rcu(head, addr, vid);
+	if (likely(fdb)) {
+		/* attempt to update an entry for a local interface */
+		if (unlikely(fdb->is_local)) {
+			if (net_ratelimit())
+				br_warn(br, "received packet on %s with own address as source address (addr:%pM, vlan:%u)\n",
+					source->dev->name, addr, vid);
+		} else {
+			unsigned long now = jiffies;
+
+			/* fastpath: update of existing entry */
+			if (unlikely(source != fdb->dst)) {
+				fdb->dst = source;
+				fdb_modified = true;
+				/* Take over HW learned entry */
+				if (unlikely(fdb->added_by_external_learn))
+					fdb->added_by_external_learn = 0;
+			}
+			if (now != fdb->updated)
+				fdb->updated = now;
+			if (unlikely(added_by_user))
+				fdb->added_by_user = 1;
+			if (unlikely(fdb_modified)) {
+				trace_br_fdb_update(br, source, addr, vid, added_by_user);
+				fdb_notify(br, fdb, RTM_NEWNEIGH);
+			}
+		}
+	} else {
+		spin_lock(&br->hash_lock);
+		if (likely(!fdb_find_rcu(head, addr, vid))) {
+			fdb = fdb_create(head, source, addr, vid, 0, 0);
+			if (fdb) {
+				if (unlikely(added_by_user))
+					fdb->added_by_user = 1;
+				fdb->is_static = 1;
+				fdb_add_hw_addr_by_user(br, addr);
+				trace_br_fdb_update(br, source, addr, vid, added_by_user);
+				fdb_notify(br, fdb, RTM_NEWNEIGH);
+			}
+		}
+		/* else  we lose race and someone else inserts
+		 * it first, don't bother updating
+		 */
+		spin_unlock(&br->hash_lock);
+	}
+}
+
+void br_add_or_refresh_fdb_entry_by_netdev(struct net_device *dev, const char *addr)
+{
+	struct net_bridge_port *p;
+
+	if (!is_valid_ether_addr(addr)) {
+		pr_info("bridge: Attempt to refresh with invalid ether address %pM\n",
+			addr);
+		return;
+	}
+
+	rcu_read_lock();
+	p = br_port_get_rcu(dev);
+	if (!p)
+		goto unlock;
+
+	br_fdb_update_by_user(p->br, p, addr, 0, true);
+
+unlock:
+	rcu_read_unlock();
+}
+EXPORT_SYMBOL_GPL(br_add_or_refresh_fdb_entry_by_netdev);

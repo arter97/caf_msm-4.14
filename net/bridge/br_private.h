@@ -634,6 +634,8 @@ void br_multicast_uninit_stats(struct net_bridge *br);
 void br_multicast_get_stats(const struct net_bridge *br,
 			    const struct net_bridge_port *p,
 			    struct br_mcast_stats *dest);
+void br_fdb_update_by_user(struct net_bridge *br, struct net_bridge_port *source,
+		   const unsigned char *addr, u16 vid, bool added_by_user);
 
 #define mlock_dereference(X, br) \
 	rcu_dereference_protected(X, lockdep_is_held(&br->multicast_lock))
