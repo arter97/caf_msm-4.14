@@ -47,12 +47,7 @@ static void free_network(struct npu_host_ctx *ctx, struct npu_client *client,
 	int64_t id);
 static int network_get(struct npu_network *network);
 static int network_put(struct npu_network *network);
-<<<<<<< HEAD   (e9873b msm: vidc: Fix possible UAF during buffer unregister call)
-static void app_msg_proc(struct npu_host_ctx *host_ctx, uint32_t *msg);
-static void log_msg_proc(struct npu_device *npu_dev, uint32_t *msg);
-=======
 static int app_msg_proc(struct npu_host_ctx *host_ctx, uint32_t *msg);
->>>>>>> CHANGE (d36829 msm: npu v2: Fix OOB issue in IPC between driver and firmwar)
 static void host_session_msg_hdlr(struct npu_device *npu_dev);
 static int host_error_hdlr(struct npu_device *npu_dev, bool force);
 static int npu_send_network_cmd(struct npu_device *npu_dev,
@@ -2156,8 +2151,6 @@ int32_t npu_host_get_fw_property(struct npu_device *npu_dev,
 		}
 	} else {
 		NPU_ERR("get fw property failed %d\n", ret);
-<<<<<<< HEAD   (e9873b msm: vidc: Fix possible UAF during buffer unregister call)
-=======
 		NPU_ERR("prop_id: %x\n", prop_from_fw->prop_id);
 		NPU_ERR("network_hdl: %x\n", prop_from_fw->network_hdl);
 		NPU_ERR("param_num: %x\n", prop_from_fw->num_of_params);
@@ -2166,7 +2159,6 @@ int32_t npu_host_get_fw_property(struct npu_device *npu_dev,
 			(uint32_t)PROP_PARAM_MAX_SIZE);
 		for (i = 0; i < num_of_params; i++)
 			NPU_ERR("%x\n", prop_from_fw->prop_param[i]);
->>>>>>> CHANGE (d36829 msm: npu v2: Fix OOB issue in IPC between driver and firmwar)
 	}
 
 free_misc_cmd:

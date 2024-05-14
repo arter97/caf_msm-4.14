@@ -27,16 +27,7 @@
  * Defines
  * -------------------------------------------------------------------------
  */
-<<<<<<< HEAD   (e9873b msm: vidc: Fix possible UAF during buffer unregister call)
-#define LOG_MSG_HEADER_SIZE      20
-#define LOG_MSG_START_MSG_INDEX  5
-#define LOG_MSG_TOTAL_SIZE_INDEX 0
-#define LOG_MSG_MSG_ID_INDEX     1
-
-#define NPU_FW_TIMEOUT_POLL_INTERVAL_MS  20
-=======
 #define NPU_FW_TIMEOUT_POLL_INTERVAL_MS  10
->>>>>>> CHANGE (3cf3c5 msm: npu v1: Fix OOB issue in IPC between driver and firmwar)
 #define NPU_FW_TIMEOUT_MS                1000
 
 /* -------------------------------------------------------------------------
@@ -871,13 +862,7 @@ static void app_msg_proc(struct npu_host_ctx *host_ctx, uint32_t *msg)
 
 		pr_debug("NPU_IPC_MSG_LOOPBACK_DONE loopbackParams: 0x%x\n",
 			lb_rsp_pkt->loopbackParams);
-<<<<<<< HEAD   (e9873b msm: vidc: Fix possible UAF during buffer unregister call)
 		complete_all(&host_ctx->loopback_done);
-=======
-		host_ctx->misc_pending = false;
-
-		complete_all(&host_ctx->misc_done);
->>>>>>> CHANGE (3cf3c5 msm: npu v1: Fix OOB issue in IPC between driver and firmwar)
 		break;
 	}
 	case NPU_IPC_MSG_SET_PROPERTY_DONE:
@@ -892,14 +877,8 @@ static void app_msg_proc(struct npu_host_ctx *host_ctx, uint32_t *msg)
 			param[0]);
 
 		host_ctx->cmd_ret_status = prop_rsp_pkt->header.status;
-<<<<<<< HEAD   (e9873b msm: vidc: Fix possible UAF during buffer unregister call)
 
 		complete_all(&host_ctx->property_done);
-=======
-		host_ctx->misc_pending = false;
-
-		complete_all(&host_ctx->misc_done);
->>>>>>> CHANGE (3cf3c5 msm: npu v1: Fix OOB issue in IPC between driver and firmwar)
 		break;
 	}
 	case NPU_IPC_MSG_GET_PROPERTY_DONE:
@@ -1084,11 +1063,6 @@ static int npu_send_misc_cmd(struct npu_device *npu_dev, uint32_t q_idx,
 			((struct ipc_cmd_header_pkt *)cmd_ptr)->cmd_type);
 		host_ctx->cmd_ret_status = 0;
 		ret = npu_host_ipc_send_cmd(npu_dev, q_idx, cmd_ptr);
-<<<<<<< HEAD   (e9873b msm: vidc: Fix possible UAF during buffer unregister call)
-=======
-		if (ret)
-			host_ctx->misc_pending = false;
->>>>>>> CHANGE (3cf3c5 msm: npu v1: Fix OOB issue in IPC between driver and firmwar)
 	}
 	mutex_unlock(&host_ctx->lock);
 
@@ -1227,15 +1201,6 @@ int32_t npu_host_set_fw_property(struct npu_device *npu_dev,
 		goto set_prop_exit;
 	}
 
-<<<<<<< HEAD   (e9873b msm: vidc: Fix possible UAF during buffer unregister call)
-=======
-	ret = fw_init(npu_dev);
-	if (ret) {
-		pr_err("fw_init fail\n");
-		goto set_prop_exit;
-	}
-
->>>>>>> CHANGE (3cf3c5 msm: npu v1: Fix OOB issue in IPC between driver and firmwar)
 	prop_packet->header.cmd_type = NPU_IPC_CMD_SET_PROPERTY;
 	prop_packet->header.size = pkt_size;
 	prop_packet->header.trans_id =
@@ -1298,15 +1263,6 @@ int32_t npu_host_get_fw_property(struct npu_device *npu_dev,
 	if (!prop_packet)
 		return -ENOMEM;
 
-<<<<<<< HEAD   (e9873b msm: vidc: Fix possible UAF during buffer unregister call)
-=======
-	ret = fw_init(npu_dev);
-	if (ret) {
-		pr_err("fw_init fail\n");
-		goto get_prop_exit;
-	}
-
->>>>>>> CHANGE (3cf3c5 msm: npu v1: Fix OOB issue in IPC between driver and firmwar)
 	prop_packet->header.cmd_type = NPU_IPC_CMD_GET_PROPERTY;
 	prop_packet->header.size = pkt_size;
 	prop_packet->header.trans_id =
