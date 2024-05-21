@@ -1554,6 +1554,25 @@ struct ipa3_uc_ctx {
 };
 
 /**
+ * struct ipa3_uc_eogre_ctx
+ * @eogre_uc_stats_ofst: EoGRE stats offset
+ * @eogre_uc_stats_mmio: EoGRE stats
+ */
+struct ipa3_uc_eogre_ctx {
+	u32 eogre_uc_stats_ofst;
+	struct Ipa3HwStatsEOGREInfoData_t *eogre_uc_stats_mmio;
+};
+
+/**
+ * eogre_header_add_id    : EoGRE header add stats
+ * eogre_header_remove_id : EoGRE header removal stats
+ */
+struct Ipa3HwStatsEOGREInfoData_t {
+	uint32_t eogre_header_add_id;
+	uint32_t eogre_header_remove_id;
+} __packed;
+
+/**
  * struct ipa3_uc_wdi_ctx
  * @wdi_uc_top_ofst:
  * @wdi_uc_top_mmio:
@@ -2028,6 +2047,7 @@ struct ipa3_context {
 
 	struct ipa3_uc_wdi_ctx uc_wdi_ctx;
 	struct ipa3_uc_ntn_ctx uc_ntn_ctx;
+	struct ipa3_uc_eogre_ctx uc_eogre_ctx;
 	struct ipa3_uc_wigig_ctx uc_wigig_ctx;
 	u32 wan_rx_ring_size;
 	u32 lan_rx_ring_size;
@@ -2775,6 +2795,8 @@ int ipa3_enable_wigig_pipe_i(enum ipa_client_type client);
 
 int ipa3_disable_wigig_pipe_i(enum ipa_client_type client);
 
+int ipa3_get_eogre_stats(struct Ipa3HwStatsEOGREInfoData_t *stats);
+
 /*
  * To retrieve doorbell physical address of
  * wlan pipes
@@ -3063,6 +3085,8 @@ int ipa3_write_qmapid_wdi_pipe(u32 clnt_hdl, u8 qmap_id);
 int ipa3_write_qmapid_wdi3_gsi_pipe(u32 clnt_hdl, u8 qmap_id);
 int ipa3_tag_process(struct ipa3_desc *desc, int num_descs,
 		    unsigned long timeout);
+
+int ipa3_eogre_stats_init(void);
 
 void ipa3_q6_pre_shutdown_cleanup(void);
 void ipa3_q6_post_shutdown_cleanup(void);

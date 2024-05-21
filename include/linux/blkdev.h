@@ -228,6 +228,7 @@ struct request {
 
 	unsigned short write_hint;
 
+	refcount_t ref;
 	unsigned long deadline;
 	struct list_head timeout_list;
 

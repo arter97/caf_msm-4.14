@@ -60,6 +60,94 @@ static void ipa3_eth_save_client_mapping(
 	}
 }
 
+
+static void ipa3_uc_eogre_event_log_info_handler(
+		struct IpaHwEventLogInfoData_t *uc_event_top_mmio)
+{
+	struct Ipa3HwEventInfoData_t *stats_ptr = &uc_event_top_mmio->statsInfo;
+
+	if ((uc_event_top_mmio->protocolMask &
+		(1 << IPA_HW_FEATURE_EOGRE)) == 0) {
+		IPAERR("EOGRE protocol missing 0x%x\n",
+				uc_event_top_mmio->protocolMask);
+		return;
+	}
+
+	if (stats_ptr->featureInfo[IPA_HW_FEATURE_EOGRE].params.size !=
+		sizeof(struct Ipa3HwStatsEOGREInfoData_t)) {
+		IPAERR("eogre stats sz invalid exp=%zu is=%u\n",
+		sizeof(struct Ipa3HwStatsEOGREInfoData_t),
+		stats_ptr->featureInfo[IPA_HW_FEATURE_EOGRE].params.size);
+		return;
+	}
+
+	ipa3_ctx->uc_eogre_ctx.eogre_uc_stats_ofst =
+		stats_ptr->baseAddrOffset +
+		stats_ptr->featureInfo[IPA_HW_FEATURE_EOGRE].params.offset;
+	IPAERR("EOGRE stats ofst=0x%x\n",
+		ipa3_ctx->uc_eogre_ctx.eogre_uc_stats_ofst);
+	if (ipa3_ctx->uc_eogre_ctx.eogre_uc_stats_ofst +
+		sizeof(struct Ipa3HwStatsEOGREInfoData_t) >=
+		ipa3_ctx->ctrl->ipa_reg_base_ofst +
+		ipahal_get_reg_n_ofst(IPA_SW_AREA_RAM_DIRECT_ACCESS_n, 0) +
+		ipa3_ctx->smem_sz) {
+		IPAERR("uc_eogre_stats 0x%x outside SRAM\n",
+			ipa3_ctx->uc_eogre_ctx.eogre_uc_stats_ofst);
+		return;
+	}
+
+	ipa3_ctx->uc_eogre_ctx.eogre_uc_stats_mmio =
+		ioremap(ipa3_ctx->ipa_wrapper_base +
+		ipa3_ctx->uc_eogre_ctx.eogre_uc_stats_ofst,
+		sizeof(struct Ipa3HwStatsEOGREInfoData_t));
+	if (!ipa3_ctx->uc_eogre_ctx.eogre_uc_stats_mmio) {
+		IPAERR("fail to ioremap uc eogre stats\n");
+		return;
+	}
+}
+
+int ipa3_get_eogre_stats(struct Ipa3HwStatsEOGREInfoData_t *stats)
+{
+
+#define EOGRE_STATS(y) (stats->y = \
+	ipa3_ctx->uc_eogre_ctx.eogre_uc_stats_mmio->y)
+
+	if (unlikely(!ipa3_ctx)) {
+		IPAERR("IPA driver was not initialized\n");
+		return -EINVAL;
+	}
+
+	if (!stats || !ipa3_ctx->uc_eogre_ctx.eogre_uc_stats_mmio) {
+		IPAERR("bad parms stats=%pK eogre_stats=%pK\n",
+			stats,
+			ipa3_ctx->uc_eogre_ctx.eogre_uc_stats_mmio);
+		return -EINVAL;
+	}
+
+	IPA_ACTIVE_CLIENTS_INC_SIMPLE();
+
+	EOGRE_STATS(eogre_header_add_id);
+	EOGRE_STATS(eogre_header_remove_id);
+
+	IPA_ACTIVE_CLIENTS_DEC_SIMPLE();
+
+	return 0;
+}
+
+
+int ipa3_eogre_stats_init(void)
+{
+	struct ipa3_uc_hdlrs uc_wdi_cbs = { 0 };
+
+	uc_wdi_cbs.ipa_uc_event_log_info_hdlr =
+		ipa3_uc_eogre_event_log_info_handler;
+
+	ipa3_uc_register_handlers(IPA_HW_FEATURE_EOGRE, &uc_wdi_cbs);
+
+	return 0;
+}
+
+
 static int ipa3_eth_config_uc(bool init,
 	u8 protocol,
 	u8 dir,

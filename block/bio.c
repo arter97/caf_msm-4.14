@@ -1817,12 +1817,32 @@ void bio_check_pages_dirty(struct bio *bio)
 	}
 }
 
+void update_io_ticks(struct hd_struct *part, unsigned long now)
+{
+	unsigned long stamp;
+	int cpu;
+again:
+	stamp = READ_ONCE(part->stamp);
+	if (unlikely(stamp != now)) {
+		if (likely(cmpxchg(&part->stamp, stamp, now) == stamp)) {
+			cpu = part_stat_lock();
+			__part_stat_add(cpu, part, io_ticks, 1);
+			part_stat_unlock();
+		}
+	}
+	if (part->partno) {
+		part = &part_to_disk(part)->part0;
+		goto again;
+	}
+}
+
 void generic_start_io_acct(struct request_queue *q, int rw,
 			   unsigned long sectors, struct hd_struct *part)
 {
-	int cpu = part_stat_lock();
+	int cpu;
 
-	part_round_stats(q, cpu, part);
+	cpu = part_stat_lock();
+	update_io_ticks(part, jiffies);
 	part_stat_inc(cpu, part, ios[rw]);
 	part_stat_add(cpu, part, sectors[rw], sectors);
 	part_inc_in_flight(q, part, rw);
@@ -1834,11 +1854,14 @@ EXPORT_SYMBOL(generic_start_io_acct);
 void generic_end_io_acct(struct request_queue *q, int rw,
 			 struct hd_struct *part, unsigned long start_time)
 {
-	unsigned long duration = jiffies - start_time;
-	int cpu = part_stat_lock();
+	unsigned long now = jiffies;
+	unsigned long duration = now - start_time;
+	int cpu;
 
+	cpu = part_stat_lock();
+	update_io_ticks(part, now);
 	part_stat_add(cpu, part, ticks[rw], duration);
-	part_round_stats(q, cpu, part);
+	part_stat_add(cpu, part, time_in_queue, duration);
 	part_dec_in_flight(q, part, rw);
 
 	part_stat_unlock();
