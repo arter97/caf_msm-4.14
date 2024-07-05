@@ -732,6 +732,8 @@ static int32_t cam_eeprom_get_cal_data(struct cam_eeprom_ctrl_t *e_ctrl,
 {
 	struct cam_buf_io_cfg *io_cfg;
 	uint32_t              i = 0;
+	size_t                plane_offset;
+	int32_t               mem_handle;
 	int                   rc = 0;
 	uintptr_t              buf_addr;
 	size_t                buf_size;
@@ -741,6 +743,8 @@ static int32_t cam_eeprom_get_cal_data(struct cam_eeprom_ctrl_t *e_ctrl,
 	io_cfg = (struct cam_buf_io_cfg *) ((uint8_t *)
 		&csl_packet->payload +
 		csl_packet->io_configs_offset);
+	plane_offset = io_cfg->offsets[0];
+	mem_handle   = io_cfg->mem_handle[0];
 
 	CAM_DBG(CAM_EEPROM, "number of IO configs: %d:",
 		csl_packet->num_io_configs);
@@ -748,20 +752,20 @@ static int32_t cam_eeprom_get_cal_data(struct cam_eeprom_ctrl_t *e_ctrl,
 	for (i = 0; i < csl_packet->num_io_configs; i++) {
 		CAM_DBG(CAM_EEPROM, "Direction: %d:", io_cfg->direction);
 		if (io_cfg->direction == CAM_BUF_OUTPUT) {
-			rc = cam_mem_get_cpu_buf(io_cfg->mem_handle[0],
+			rc = cam_mem_get_cpu_buf(mem_handle,
 				&buf_addr, &buf_size);
 			if (rc) {
 				CAM_ERR(CAM_EEPROM, "Fail in get buffer: %d",
 					rc);
 				return rc;
 			}
-			if (buf_size <= io_cfg->offsets[0]) {
+			if (buf_size <= plane_offset) {
 				CAM_ERR(CAM_EEPROM, "Not enough buffer");
 				rc = -EINVAL;
 				goto rel_cmd_buf;
 			}
 
-			remain_len = buf_size - io_cfg->offsets[0];
+			remain_len = buf_size - plane_offset;
 			CAM_DBG(CAM_EEPROM, "buf_addr : %pK, buf_size : %zu\n",
 				(void *)buf_addr, buf_size);
 
@@ -772,7 +776,7 @@ static int32_t cam_eeprom_get_cal_data(struct cam_eeprom_ctrl_t *e_ctrl,
 				rc = -EINVAL;
 				goto rel_cmd_buf;
 			}
-			read_buffer += io_cfg->offsets[0];
+			read_buffer += plane_offset;
 
 			if (remain_len < e_ctrl->cal_data.num_data) {
 				CAM_ERR(CAM_EEPROM,
@@ -785,9 +789,9 @@ static int32_t cam_eeprom_get_cal_data(struct cam_eeprom_ctrl_t *e_ctrl,
 				e_ctrl->cal_data.num_data);
 			memcpy(read_buffer, e_ctrl->cal_data.mapdata,
 					e_ctrl->cal_data.num_data);
-			if (cam_mem_put_cpu_buf(io_cfg->mem_handle[0]))
+			if (cam_mem_put_cpu_buf(mem_handle))
 				CAM_WARN(CAM_EEPROM, "Fail in put buffer: 0x%x",
-					io_cfg->mem_handle[0]);
+					mem_handle);
 		} else {
 			CAM_ERR(CAM_EEPROM, "Invalid direction");
 			rc = -EINVAL;
@@ -797,9 +801,9 @@ static int32_t cam_eeprom_get_cal_data(struct cam_eeprom_ctrl_t *e_ctrl,
 	return rc;
 
 rel_cmd_buf:
-	if (cam_mem_put_cpu_buf(io_cfg->mem_handle[0]))
+	if (cam_mem_put_cpu_buf(mem_handle))
 		CAM_WARN(CAM_EEPROM, "Fail in put buffer : 0x%x",
-			io_cfg->mem_handle[0]);
+			mem_handle);
 
 	return rc;
 }
