@@ -5315,7 +5315,7 @@ static void stmmac_reinit_rx_buffers(struct stmmac_priv *priv)
 	for (queue = 0; queue < rx_cnt; queue++) {
 		struct stmmac_rx_queue *rx_q = &priv->rx_queue[queue];
 
-		for (i = 0; i < DMA_RX_SIZE; i++) {
+		for (i = 0; i < rx_q->dma_rx_desc_sz; i++) {
 			if (rx_q->rx_skbuff[i]) {
 				dma_unmap_single(GET_MEM_PDEV_DEV, rx_q->rx_skbuff_dma[i],
 					priv->dma_buf_sz, DMA_FROM_DEVICE);
@@ -5328,7 +5328,7 @@ static void stmmac_reinit_rx_buffers(struct stmmac_priv *priv)
 	for (queue = 0; queue < rx_cnt; queue++) {
 		struct stmmac_rx_queue *rx_q = &priv->rx_queue[queue];
 
-		for (i = 0; i < DMA_RX_SIZE; i++) {
+		for (i = 0; i < rx_q->dma_rx_desc_sz; i++) {
 			struct dma_desc *p;
 
 			if (priv->extend_desc)
