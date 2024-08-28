@@ -28,6 +28,7 @@
 #include <linux/ioport.h>
 #include <linux/interrupt.h>
 #include <linux/init.h>
+#include <linux/irq.h>
 #include <linux/console.h>
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
@@ -1174,9 +1175,6 @@ static int msm_startup(struct uart_port *port)
 	unsigned int data, rfr_level, mask;
 	int ret;
 
-	snprintf(msm_port->name, sizeof(msm_port->name),
-		 "msm_serial%d", port->line);
-
 	/*
 	 * UART clk must be kept enabled to
 	 * avoid losing received character
@@ -1215,19 +1213,9 @@ static int msm_startup(struct uart_port *port)
 		msm_request_rx_dma(msm_port, msm_port->uart.mapbase);
 	}
 
-	ret = request_irq(port->irq, msm_uart_irq, IRQF_TRIGGER_HIGH,
-			  msm_port->name, port);
-	if (unlikely(ret))
-		goto err_irq;
-
+	enable_irq(port->irq);
 	return 0;
 
-err_irq:
-	if (msm_port->is_uartdm)
-		msm_release_dma(msm_port);
-
-	clk_disable_unprepare(msm_port->pclk);
-	clk_disable_unprepare(msm_port->clk);
 err_pclk:
 	clk_disable_unprepare(msm_port->clk);
 
@@ -1239,6 +1227,8 @@ static void msm_shutdown(struct uart_port *port)
 	struct msm_port *msm_port = UART_TO_MSM(port);
 
 	msm_port->imr = 0;
+
+	disable_irq(port->irq);
 	msm_write(port, 0, UART_IMR); /* disable interrupts */
 
 	if (msm_port->is_uartdm)
@@ -1247,7 +1237,6 @@ static void msm_shutdown(struct uart_port *port)
 	clk_disable_unprepare(msm_port->pclk);
 	clk_disable_unprepare(msm_port->clk);
 
-	free_irq(port->irq, port);
 }
 
 static void msm_set_termios(struct uart_port *port, struct ktermios *termios,
@@ -1793,6 +1782,7 @@ static int msm_serial_probe(struct platform_device *pdev)
 	struct uart_port *port;
 	const struct of_device_id *id;
 	int irq, line;
+	int ret;
 
 	if (pdev->dev.of_node)
 		line = of_alias_get_id(pdev->dev.of_node, "serial");
@@ -1810,6 +1800,9 @@ static int msm_serial_probe(struct platform_device *pdev)
 	port = msm_get_port_from_line(line);
 	port->dev = &pdev->dev;
 	msm_port = UART_TO_MSM(port);
+
+	snprintf(msm_port->name, sizeof(msm_port->name),
+		 "msm_serial_%d", port->line);
 
 	id = of_match_device(msm_uartdm_table, &pdev->dev);
 	if (id)
@@ -1839,6 +1832,14 @@ static int msm_serial_probe(struct platform_device *pdev)
 	if (unlikely(irq < 0))
 		return -ENXIO;
 	port->irq = irq;
+
+	irq_set_status_flags(port->irq, IRQ_NOAUTOEN);
+	ret = devm_request_irq(port->dev, port->irq, msm_uart_irq,
+			       IRQF_TRIGGER_HIGH, msm_port->name, port);
+	if (ret) {
+		dev_err(port->dev, "Failed to get IRQ ret %d\n", ret);
+		return ret;
+	}
 
 	platform_set_drvdata(pdev, port);
 
@@ -1882,7 +1883,7 @@ static int msm_serial_resume(struct device *dev)
 #endif /* CONFIG_PM_SLEEP */
 
 static const struct dev_pm_ops msm_serial_dev_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(msm_serial_suspend, msm_serial_resume)
+	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(msm_serial_suspend, msm_serial_resume)
 };
 
 static struct platform_driver msm_platform_driver = {
