@@ -325,6 +325,8 @@ do {\
 
 #define TLMM_RGMII_RX_HV_MODE_CTL_RGRD(data)\
 	((data) = ioread32((void __iomem *)TLMM_RGMII_RX_HV_MODE_CTL_ADDRESS))
+
+#define ETHQOS_MAX_VLAN_FILTER_IDS	32
 static inline u32 PPSCMDX(u32 x, u32 val)
 {
 	return (GENMASK(PPS_MINIDX(x) + 3, PPS_MINIDX(x)) &
@@ -534,6 +536,11 @@ struct qcom_ethqos {
 
 	/* IO Macro parameters */
 	struct ethqos_io_macro io_macro;
+
+	/* VLAN filter parameters */
+	bool vlan_filter_enabled;
+	u16  vlan_filter_vids[ETHQOS_MAX_VLAN_FILTER_IDS];
+	u8   vlan_filter_vid_count;
 };
 
 struct pps_cfg {

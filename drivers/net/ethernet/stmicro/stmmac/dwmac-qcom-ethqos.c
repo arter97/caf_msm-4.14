@@ -25,6 +25,7 @@
 #include <linux/rtnetlink.h>
 #include "stmmac.h"
 #include "stmmac_platform.h"
+#include "dwmac4.h"
 #include "dwmac-qcom-ethqos.h"
 #include "stmmac_ptp.h"
 #include "dwmac-qcom-ipa-offload.h"
@@ -33,6 +34,7 @@
 #define PHY_LOOPBACK_100 0x6100
 #define PHY_LOOPBACK_10 0x4100
 #define MDIO_RD_WR_OPS_CLOCK 1
+#define VLAN_FILTER_SYSFS_DEV_ATTR_PERMS 0644
 
 static void __iomem *tlmm_central_base_addr;
 static void ethqos_rgmii_io_macro_loopback(struct qcom_ethqos *ethqos,
@@ -1048,6 +1050,16 @@ static int ethqos_configure(struct qcom_ethqos *ethqos)
 	return 0;
 }
 
+static void ethqos_vlan_filter_program_hw(struct qcom_ethqos *ethqos);
+
+static void ethqos_vlan_filter_reinit(void *priv)
+{
+	struct qcom_ethqos *ethqos = priv;
+
+	if (ethqos->vlan_filter_enabled)
+		ethqos_vlan_filter_program_hw(ethqos);
+}
+
 static void ethqos_fix_mac_speed(void *priv, unsigned int speed)
 {
 	struct qcom_ethqos *ethqos = priv;
@@ -1318,6 +1330,207 @@ static ssize_t write_ethqos_rx_clock(struct device *dev,
 static DEVICE_ATTR(rx_clock_rdy, RX_CLK_SYSFS_DEV_ATTR_PERMS,
 		   read_ethqos_rx_clock,
 		   write_ethqos_rx_clock);
+
+static int ethqos_write_vlan_filter(void __iomem *ioaddr, u8 index, u32 val)
+{
+	u32 ctrl;
+	int ret;
+
+	writel(val, ioaddr + GMAC_VLAN_TAG_DATA);
+
+	ctrl = (((u32)index << GMAC_VLAN_TAG_CTRL_OFS_SHIFT) &
+		GMAC_VLAN_TAG_CTRL_OFS_MASK) | GMAC_VLAN_TAG_CTRL_OB;
+	writel(ctrl, ioaddr + GMAC_VLAN_TAG_CTRL);
+
+	ret = readl_poll_timeout(ioaddr + GMAC_VLAN_TAG_CTRL, ctrl,
+				 !(ctrl & GMAC_VLAN_TAG_CTRL_OB),
+				 100, 10000);
+	if (ret)
+		pr_err("ethqos: VLAN filter write timeout (index=%u)\n", index);
+
+	return ret;
+}
+
+static void ethqos_vlan_filter_program_hw(struct qcom_ethqos *ethqos)
+{
+	void __iomem *ioaddr = ethqos->ioaddr;
+	u32 map0;
+	u8 i;
+
+	/* Program filter slots 0..vid_count-1 with VID entries */
+	for (i = 0; i < ethqos->vlan_filter_vid_count; i++) {
+		u32 entry = GMAC_VLAN_TAG_FILTER_VEN |
+			    GMAC_VLAN_TAG_FILTER_ETV |
+			    GMAC_VLAN_TAG_FILTER_DMACHEN |
+			    ((GMAC_VLAN_TAG_FILTER_DMACHN <<
+			      GMAC_VLAN_TAG_FILTER_DMACHN_SHIFT) &
+			     GMAC_VLAN_TAG_FILTER_DMACHN_MASK) |
+			    (ethqos->vlan_filter_vids[i] &
+			     GMAC_VLAN_TAG_FILTER_VID);
+		ethqos_write_vlan_filter(ioaddr, i, entry);
+	}
+
+	/* Clear remaining slots so stale entries don't match */
+	for (i = ethqos->vlan_filter_vid_count;
+	     i < ETHQOS_MAX_VLAN_FILTER_IDS; i++)
+		ethqos_write_vlan_filter(ioaddr, i, 0);
+
+	map0 = readl(ioaddr + MTL_RXQ_DMA_MAP0);
+	if (ethqos->vlan_filter_vid_count > 0) {
+		map0 |= MTL_RXQ_DMA_Q0DDMACH;
+	} else {
+		if (!ethqos->vlan_filter_enabled)
+			map0 &= ~MTL_RXQ_DMA_Q0DDMACH;
+	}
+	writel(map0, ioaddr + MTL_RXQ_DMA_MAP0);
+}
+
+static ssize_t read_vlan_filter(struct device *dev,
+				struct device_attribute *attr,
+				char *user_buf)
+{
+	struct net_device *netdev = to_net_dev(dev);
+	struct stmmac_priv *priv;
+	struct qcom_ethqos *ethqos;
+	ssize_t len;
+	u8 i;
+
+	if (!netdev) {
+		ETHQOSERR("NULL Pointer\n");
+		return -EINVAL;
+	}
+
+	priv = netdev_priv(netdev);
+	ethqos = priv->plat->bsp_priv;
+
+	if (!ethqos->vlan_filter_enabled || !ethqos->vlan_filter_vid_count)
+		return snprintf(user_buf, PAGE_SIZE, "disabled\n");
+
+	len = snprintf(user_buf, PAGE_SIZE, "enabled vids=");
+	for (i = 0; i < ethqos->vlan_filter_vid_count; i++) {
+		len += snprintf(user_buf + len, PAGE_SIZE - len,
+				i ? ",%u" : "%u",
+				ethqos->vlan_filter_vids[i]);
+	}
+	len += snprintf(user_buf + len, PAGE_SIZE - len, "\n");
+	return len;
+}
+static int vlan_filter_parse_vids(char *str, u16 *out, u8 max)
+{
+	char *tok;
+	u8 count = 0;
+	unsigned long val;
+
+	while ((tok = strsep(&str, ",")) != NULL) {
+		if (*tok == '\0')
+			continue;
+		if (kstrtoul(tok, 0, &val) || val == 0 || val > 4094) {
+			ETHQOSERR("Invalid VID '%s': must be 1-4094\n", tok);
+			return -EINVAL;
+		}
+		if (count >= max) {
+			ETHQOSERR("Too many VIDs (max %d)\n", max);
+			return -EINVAL;
+		}
+		out[count++] = (u16)val;
+	}
+	return count;
+}
+
+static ssize_t write_vlan_filter(struct device *dev,
+				 struct device_attribute *attr,
+				 const char *user_buf,
+				 size_t count)
+{
+	struct net_device *netdev = to_net_dev(dev);
+	struct stmmac_priv *priv;
+	struct qcom_ethqos *ethqos;
+	char buf[256];
+	char *vidstr;
+	u16 vids[ETHQOS_MAX_VLAN_FILTER_IDS];
+	int n, i, j;
+	bool is_del;
+
+	if (!netdev || !netif_running(netdev)) {
+		ETHQOSERR("NULL Pointer or Interface is down\n");
+		return -EINVAL;
+	}
+
+	if (count >= sizeof(buf)) {
+		ETHQOSERR("Input too long\n");
+		return -EINVAL;
+	}
+	memcpy(buf, user_buf, count);
+	buf[count] = '\0';
+	if (count > 0 && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+
+	priv = netdev_priv(netdev);
+	ethqos = priv->plat->bsp_priv;
+
+	/* "0" — disable all */
+	if (!strcmp(buf, "0")) {
+		ethqos->vlan_filter_vid_count = 0;
+		ethqos->vlan_filter_enabled = false;
+		ethqos_vlan_filter_program_hw(ethqos);
+		ETHQOSINFO("VLAN filter disabled\n");
+		return count;
+	}
+
+	is_del = !strncmp(buf, "del:", 4);
+	vidstr  = is_del ? buf + 4 : buf;
+
+	n = vlan_filter_parse_vids(vidstr, vids,
+				   ETHQOS_MAX_VLAN_FILTER_IDS);
+	if (n < 0)
+		return n;
+	if (n == 0) {
+		ETHQOSERR("No valid VIDs parsed\n");
+		return -EINVAL;
+	}
+
+	if (is_del) {
+		/* Remove each VID by compacting the array */
+		for (i = 0; i < n; i++) {
+			bool found = false;
+
+			for (j = 0; j < ethqos->vlan_filter_vid_count; j++) {
+				if (ethqos->vlan_filter_vids[j] != vids[i])
+					continue;
+				/* Shift tail left */
+				memmove(&ethqos->vlan_filter_vids[j],
+					&ethqos->vlan_filter_vids[j + 1],
+					(ethqos->vlan_filter_vid_count - j - 1)
+					* sizeof(u16));
+				ethqos->vlan_filter_vid_count--;
+				found = true;
+				ETHQOSINFO("VID %u removed\n", vids[i]);
+				break;
+			}
+			if (!found)
+				ETHQOSINFO("VID %u not in filter\n", vids[i]);
+		}
+	} else {
+		/* Full replace */
+		memcpy(ethqos->vlan_filter_vids, vids, n * sizeof(u16));
+		ethqos->vlan_filter_vid_count = n;
+	}
+
+	ethqos->vlan_filter_enabled = (ethqos->vlan_filter_vid_count > 0);
+	ethqos_vlan_filter_program_hw(ethqos);
+
+	if (ethqos->vlan_filter_enabled)
+		ETHQOSINFO("VLAN filter: %u VID(s) active -> DMA CH1\n",
+			   ethqos->vlan_filter_vid_count);
+	else
+		ETHQOSINFO("VLAN filter disabled (no VIDs remain)\n");
+
+	return count;
+}
+
+static DEVICE_ATTR(vlan_filter, VLAN_FILTER_SYSFS_DEV_ATTR_PERMS,
+		   read_vlan_filter,
+		   write_vlan_filter);
 
 static ssize_t read_phy_reg_dump(struct file *file, char __user *user_buf,
 				 size_t count, loff_t *ppos)
@@ -2429,6 +2642,10 @@ static int ethqos_create_debugfs(struct qcom_ethqos        *ethqos)
 			 ETHQOSERR(" Can't create rx_clock_rdy sysfs node");
 	}
 
+	ret = sysfs_create_file(&netdev->dev.kobj, &dev_attr_vlan_filter.attr);
+	if (ret)
+		ETHQOSERR("Can't create vlan_filter sysfs node\n");
+
 	return 0;
 
 fail:
@@ -3251,6 +3468,7 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 
 	plat_dat->bsp_priv = ethqos;
 	plat_dat->fix_mac_speed = ethqos_fix_mac_speed;
+	plat_dat->vlan_filter_reinit = ethqos_vlan_filter_reinit;
 	plat_dat->tx_select_queue = dwmac_qcom_select_queue;
 	plat_dat->get_plat_tx_coal_frames =  dwmac_qcom_get_plat_tx_coal_frames;
 	plat_dat->has_gmac4 = 1;
@@ -3423,7 +3641,7 @@ static int qcom_ethqos_probe(struct platform_device *pdev)
 	priv->rx_queue[IPA_DMA_RX_CH].skip_sw = true;
 	priv->tx_queue[IPA_DMA_TX_CH].skip_sw = true;
 	ethqos_ipa_offload_event_handler(ethqos, EV_PROBE_INIT);
-	priv->hw->mac->map_mtl_to_dma(priv->hw, 0, 1); //change
+	priv->hw->mac->map_mtl_to_dma(priv->hw, 0, 1);
 #endif
 
 	ethqos_create_emac_rec_device_node(&ethqos->emac_rec_dev_t,
