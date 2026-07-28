@@ -1318,6 +1318,8 @@ static ssize_t write_ethqos_rx_clock(struct device *dev,
 	if (plat->wait_for_mac_rx_clk) {
 		stmmac_mac2mac_adjust_link(priv->plat->mac2mac_rgmii_speed,
 					   priv);
+		if (plat->vlan_filter_reinit)
+			plat->vlan_filter_reinit(ethqos);
 		stmmac_start_all_queues(priv);
 		netif_carrier_on(priv->dev);
 		plat->wait_for_mac_rx_clk = false;
@@ -1346,7 +1348,7 @@ static int ethqos_write_vlan_filter(void __iomem *ioaddr, u8 index, u32 val)
 				 !(ctrl & GMAC_VLAN_TAG_CTRL_OB),
 				 100, 10000);
 	if (ret)
-		pr_err("ethqos: VLAN filter write timeout (index=%u)\n", index);
+		ETHQOSERR("VLAN filter write timeout (index=%u)\n", index);
 
 	return ret;
 }
@@ -1470,9 +1472,11 @@ static ssize_t write_vlan_filter(struct device *dev,
 
 	/* "0" — disable all */
 	if (!strcmp(buf, "0")) {
+		mutex_lock(&priv->lock);
 		ethqos->vlan_filter_vid_count = 0;
 		ethqos->vlan_filter_enabled = false;
 		ethqos_vlan_filter_program_hw(ethqos);
+		mutex_unlock(&priv->lock);
 		ETHQOSINFO("VLAN filter disabled\n");
 		return count;
 	}
@@ -1488,6 +1492,8 @@ static ssize_t write_vlan_filter(struct device *dev,
 		ETHQOSERR("No valid VIDs parsed\n");
 		return -EINVAL;
 	}
+
+	mutex_lock(&priv->lock);
 
 	if (is_del) {
 		/* Remove each VID by compacting the array */
@@ -1518,6 +1524,8 @@ static ssize_t write_vlan_filter(struct device *dev,
 
 	ethqos->vlan_filter_enabled = (ethqos->vlan_filter_vid_count > 0);
 	ethqos_vlan_filter_program_hw(ethqos);
+
+	mutex_unlock(&priv->lock);
 
 	if (ethqos->vlan_filter_enabled)
 		ETHQOSINFO("VLAN filter: %u VID(s) active -> DMA CH1\n",

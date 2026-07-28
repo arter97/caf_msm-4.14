@@ -2738,9 +2738,6 @@ static int stmmac_hw_setup(struct net_device *dev, bool init_ptp)
 			priv->hw->dma->enable_tso(priv->ioaddr, 1, chan);
 	}
 
-	if (priv->plat->vlan_filter_reinit)
-		priv->plat->vlan_filter_reinit(priv->plat->bsp_priv);
-
 	/* Start the ball rolling... */
 	stmmac_start_all_dma(priv);
 
@@ -2887,10 +2884,16 @@ static int stmmac_open(struct net_device *dev)
 		priv->plat->update_ahb_clk_cfg(priv, 0, 0);
 
 	if (priv->plat->mac2mac_en) {
+		mutex_lock(&priv->lock);
 		stmmac_mac2mac_adjust_link(priv->plat->mac2mac_rgmii_speed,
 					   priv);
 		priv->plat->mac2mac_link = true;
+		if (priv->plat->vlan_filter_reinit)
+			priv->plat->vlan_filter_reinit(priv->plat->bsp_priv);
+		mutex_unlock(&priv->lock);
 		netif_carrier_on(dev);
+	} else if (priv->plat->vlan_filter_reinit) {
+		priv->plat->vlan_filter_reinit(priv->plat->bsp_priv);
 	}
 
 	return 0;
@@ -5024,10 +5027,15 @@ int stmmac_resume(struct device *dev)
 		stmmac_mac2mac_adjust_link(priv->plat->mac2mac_rgmii_speed,
 					   priv);
 		priv->plat->mac2mac_link = true;
+		if (priv->plat->vlan_filter_reinit)
+			priv->plat->vlan_filter_reinit(priv->plat->bsp_priv);
 		stmmac_start_all_queues(priv);
 		netif_carrier_on(ndev);
-	} else
+	} else {
+		if (priv->plat->vlan_filter_reinit)
+			priv->plat->vlan_filter_reinit(priv->plat->bsp_priv);
 		stmmac_start_all_queues(priv);
+	}
 
 	mutex_unlock(&priv->lock);
 
